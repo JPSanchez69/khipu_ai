@@ -16,8 +16,15 @@ Modelo objetivo: **`gemma-3n-E2B-it-litert-lm`** → archivo
 
 ## Opción A — Archivo en el teléfono (recomendado)
 
-1. Descarga `gemma-3n-E2B-it-int4.litertlm` (PC o teléfono).
-2. En la app: icono de modelo → **Instalar desde archivo .litertlm**.
+1. Copia `gemma-3n-E2B-it-int4.litertlm` al teléfono (PC → adb o descarga).
+   Preferido (scoped storage, legible por la app):
+
+   ```bash
+   adb push gemma-3n-E2B-it-int4.litertlm /sdcard/Android/data/pe.khipu.khipu_ai/files/
+   ```
+
+   Alternativa: `/sdcard/Download/` (puede fallar por permisos en Android 11+).
+2. En la app: icono de modelo → **Instalar desde Descargas**.
 3. Activa el chip **Gemma**. Luego puedes usar modo avión.
 
 Equivalente en código:
