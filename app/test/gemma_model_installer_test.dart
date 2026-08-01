@@ -16,7 +16,7 @@ void main() {
 
     test('ready e idempotente si el archivo existe', () async {
       final installer = GemmaModelInstaller(
-        resolveModelPath: () async => '/fake/gemma.litertlm',
+        resolveModelPath: () async => '/fake/gemma.task',
         installImpl: (path, {onProgress}) async {
           onProgress?.call(100);
         },
@@ -30,7 +30,7 @@ void main() {
 
     test('failed si installImpl lanza', () async {
       final installer = GemmaModelInstaller(
-        resolveModelPath: () async => '/fake/gemma.litertlm',
+        resolveModelPath: () async => '/fake/gemma.task',
         installImpl: (path, {onProgress}) async {
           throw StateError('boom');
         },

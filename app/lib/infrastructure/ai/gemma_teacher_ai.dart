@@ -6,8 +6,8 @@ import '../../domain/ports/teacher_ai_port.dart';
 import 'gemma_model_config.dart';
 import 'teacher_prompts.dart';
 
-/// Adapter Gemma 3n E2B (LiteRT-LM) vía flutter_gemma.
-/// Sin fixtures: fallos → [TeacherAiException] (UI de error, pizarra vacía).
+/// Adapter Gemma 3 1B-IT (MediaPipe .task) vía flutter_gemma.
+/// Texto only: sin visión/fotos. Fallos → [TeacherAiException].
 class GemmaTeacherAi implements TeacherAiPort {
   GemmaTeacherAi({
     this._parser = const LessonScriptParser(),
@@ -17,7 +17,6 @@ class GemmaTeacherAi implements TeacherAiPort {
 
   InferenceModel? _model;
   var _ready = false;
-  var _vision = false;
   String? _lastInitError;
 
   @override
@@ -25,20 +24,19 @@ class GemmaTeacherAi implements TeacherAiPort {
 
   @override
   Future<bool> isReady() async {
-    await _ensureModel(needVision: false);
+    await _ensureModel();
     return _ready;
   }
 
   /// Permite reintentar tras instalar el modelo en caliente.
   void invalidate() {
     _ready = false;
-    _vision = false;
     _lastInitError = null;
     _model = null;
   }
 
-  Future<void> _ensureModel({required bool needVision}) async {
-    if (_ready && (!needVision || _vision)) return;
+  Future<void> _ensureModel() async {
+    if (_ready) return;
 
     if (!FlutterGemma.hasActiveModel()) {
       _ready = false;
@@ -52,26 +50,19 @@ class GemmaTeacherAi implements TeacherAiPort {
     } catch (_) {}
     _model = null;
 
-    final tokens = needVision
-        ? GemmaModelConfig.maxTokensWithImage
-        : GemmaModelConfig.maxTokens;
-
-    // MVP demo: CPU primero (estable en A54). GPU como respaldo.
+    // CPU primero (estable en A54). GPU como respaldo.
     final backends = [PreferredBackend.cpu, PreferredBackend.gpu];
 
     for (final backend in backends) {
       try {
         _model = await FlutterGemma.getActiveModel(
-          maxTokens: tokens,
+          maxTokens: GemmaModelConfig.maxTokens,
           preferredBackend: backend,
-          // Visión solo si hay foto (carga más liviana en demo texto).
-          supportImage: needVision,
-          maxNumImages: needVision ? GemmaModelConfig.maxNumImages : 1,
+          supportImage: false,
         );
         _ready = true;
-        _vision = needVision;
         _lastInitError = null;
-        debugPrint('Khipu: Gemma E2B listo ($backend, vision=$needVision)');
+        debugPrint('Khipu: Gemma 3 1B listo ($backend)');
         return;
       } catch (e, st) {
         _lastInitError = '$e';
@@ -81,8 +72,7 @@ class GemmaTeacherAi implements TeacherAiPort {
     }
 
     _ready = false;
-    _vision = false;
-    debugPrint('Khipu: Gemma no disponible.');
+    debugPrint('Khipu: Gemma 3 1B no disponible.');
   }
 
   Never _fail(String message, {Object? cause}) {
@@ -91,11 +81,14 @@ class GemmaTeacherAi implements TeacherAiPort {
 
   @override
   Future<LessonResult> teach(TeachRequest request) async {
-    final needVision = request.hasImage;
-    await _ensureModel(needVision: needVision);
+    if (request.hasImage) {
+      _fail('Este modelo no admite fotos.');
+    }
+
+    await _ensureModel();
     if (!_ready || _model == null) {
       _fail(
-        'Gemma no está listo. Instala el modelo (.litertlm) con push_model.ps1.',
+        'Gemma no está listo. Instala el modelo (.task) con push_model.ps1.',
         cause: _lastInitError,
       );
     }
@@ -107,21 +100,15 @@ class GemmaTeacherAi implements TeacherAiPort {
         topK: 40,
         topP: 0.9,
         maxOutputTokens: GemmaModelConfig.maxOutputTokens,
-        supportImage: needVision,
+        supportImage: false,
         systemInstruction: TeacherPrompts.system,
       );
 
       final prompt = TeacherPrompts.userQuestion(
         request.question,
-        hasImage: needVision,
+        hasImage: false,
       );
-      final message = needVision
-          ? Message.withImage(
-              text: prompt,
-              imageBytes: request.imageJpeg!,
-              isUser: true,
-            )
-          : Message.text(text: prompt, isUser: true);
+      final message = Message.text(text: prompt, isUser: true);
 
       await chat.addQueryChunk(message);
       final response = await chat.generateChatResponse();
@@ -147,7 +134,6 @@ class GemmaTeacherAi implements TeacherAiPort {
     } catch (e) {
       if (e is TeacherAiException) rethrow;
       debugPrint('Khipu: inferencia Gemma falló: $e');
-      // OOM u otro fallo → permitir reintento en la próxima pregunta.
       invalidate();
       _fail(
         'Gemma no pudo generar la lección (posible falta de memoria). '

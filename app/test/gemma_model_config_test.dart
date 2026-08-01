@@ -3,14 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:khipu_ai/infrastructure/ai/gemma_model_config.dart';
 
 void main() {
-  test('fileType es litertlm (LiteRT-LM), no task', () {
-    expect(GemmaModelConfig.fileType, ModelFileType.litertlm);
+  test('fileType es task (MediaPipe), no litertlm', () {
+    expect(GemmaModelConfig.fileType, ModelFileType.task);
   });
 
-  test('presupuesto de contexto con imagen es mayor', () {
-    expect(
-      GemmaModelConfig.maxTokensWithImage,
-      greaterThan(GemmaModelConfig.maxTokens),
-    );
+  test('artefacto principal es Gemma 3 1B-IT int4', () {
+    expect(GemmaModelConfig.fileName, 'gemma3-1b-it-int4.task');
+    expect(GemmaModelConfig.repoId, 'litert-community/Gemma3-1B-IT');
+    expect(GemmaModelConfig.maxTokens, 2048);
   });
 }

@@ -12,7 +12,7 @@ class GemmaBootstrapCache {
   static GemmaStatus? last;
 }
 
-/// MVP: registra el .litertlm desde Documents (app_flutter) para flutter_gemma.
+/// Registra el .task desde Documents (app_flutter) para flutter_gemma / MediaPipe.
 ///
 /// El archivo debe estar en Documents de la app (propiedad de la app).
 /// Usar: `.\tools\push_model.ps1` (run-as → app_flutter).
@@ -56,7 +56,7 @@ class GemmaModelInstaller {
     return null;
   }
 
-  /// Registra el modelo en flutter_gemma (FileSource, fileType litertlm).
+  /// Registra el modelo en flutter_gemma (FileSource, fileType task).
   Future<GemmaStatus> ensureModelInstalled({
     void Function(int progress)? onProgress,
   }) async {
@@ -83,7 +83,7 @@ class GemmaModelInstaller {
         return const GemmaFailed('Registro falló (hasActiveModel=false)');
       }
       // ignore: avoid_print
-      print('Khipu: flutter_gemma listo (fileType=litertlm)');
+      print('Khipu: flutter_gemma listo (fileType=task / MediaPipe)');
       return const GemmaReady();
     } catch (e) {
       // ignore: avoid_print

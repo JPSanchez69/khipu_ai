@@ -83,7 +83,7 @@ void main() {
 
     expect(ui.phase, LessonPhase.error);
     expect(ui.errorMessage, contains('Gemma no está listo'));
-    expect(ui.engineHint, 'Gemma');
+    expect(ui.engineHint, 'Gemma 3 1B');
     expect(board.elements, isEmpty);
   });
 
@@ -105,7 +105,7 @@ void main() {
 
     final ui = container.read(lessonUiProvider);
     expect(ui.phase, LessonPhase.idle);
-    expect(ui.engineHint, 'Gemma E2B');
+    expect(ui.engineHint, 'Gemma 3 1B');
     expect(ui.errorMessage, isNull);
     expect(container.read(boardStateProvider).elements, isNotEmpty);
   });

@@ -13,7 +13,7 @@ void main() {
         overrides: [
           gemmaInstallerProvider.overrideWithValue(
             GemmaModelInstaller(
-              resolveModelPath: () async => '/fake/model.litertlm',
+              resolveModelPath: () async => '/fake/model.task',
               installImpl: (path, {onProgress}) async {},
             ),
           ),

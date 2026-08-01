@@ -19,7 +19,7 @@ final gemmaInstallerProvider = Provider<GemmaModelInstaller>((ref) {
   return GemmaModelInstaller();
 });
 
-/// Bootstrap: registro del .litertlm + estado del motor LiteRT.
+/// Bootstrap: registro del .task + estado del motor MediaPipe.
 final gemmaBootstrapProvider = FutureProvider<GemmaStatus>((ref) async {
   final installer = ref.watch(gemmaInstallerProvider);
   final progress = ref.read(modelInstallProgressProvider.notifier);
@@ -153,12 +153,11 @@ class LessonUiNotifier extends Notifier<LessonUiState> {
     final ask = ref.read(askQuestionProvider);
     final player = ref.read(lessonPlayerProvider);
     final board = ref.read(boardStateProvider.notifier);
-    final image = ref.read(attachedImageProvider);
     final boot = ref.read(gemmaBootstrapProvider);
 
     final bootHint = boot.maybeWhen(
       data: (s) => switch (s) {
-        GemmaReady() => 'Gemma E2B',
+        GemmaReady() => 'Gemma 3 1B',
         GemmaNotInstalled() => 'Gemma no listo (sin modelo)',
         GemmaFailed(:final reason) => 'Gemma falló: $reason',
         GemmaInstalling(:final progress) => 'Instalando… $progress%',
@@ -176,9 +175,7 @@ class LessonUiNotifier extends Notifier<LessonUiState> {
     board.clear();
 
     try {
-      final result = await ask(question, imageJpeg: image);
-      ref.read(attachedImageProvider.notifier).clear();
-
+      final result = await ask(question);
       if (result.engine != TeacherEngineKind.gemma) {
         throw const TeacherAiException(
           'Motor inesperado: se esperaba Gemma.',
@@ -189,7 +186,7 @@ class LessonUiNotifier extends Notifier<LessonUiState> {
         phase: LessonPhase.playing,
         lessonTitle: result.script.title,
         statusMessage: result.script.title,
-        engineHint: 'Gemma E2B',
+        engineHint: 'Gemma 3 1B',
         clearError: true,
       );
       await player.play(
@@ -202,23 +199,21 @@ class LessonUiNotifier extends Notifier<LessonUiState> {
       state = state.copyWith(
         phase: LessonPhase.idle,
         statusMessage: '¿Otra pregunta?',
-        engineHint: 'Gemma E2B',
+        engineHint: 'Gemma 3 1B',
       );
     } on TeacherAiException catch (e) {
-      ref.read(attachedImageProvider.notifier).clear();
       state = state.copyWith(
         phase: LessonPhase.error,
         errorMessage: e.message,
         statusMessage: 'Gemma no pudo enseñar',
-        engineHint: 'Gemma',
+        engineHint: 'Gemma 3 1B',
       );
     } catch (e) {
-      ref.read(attachedImageProvider.notifier).clear();
       state = state.copyWith(
         phase: LessonPhase.error,
         errorMessage: 'No pude armar la lección. Intenta de nuevo.',
         statusMessage: 'Hubo un problema',
-        engineHint: 'Gemma',
+        engineHint: 'Gemma 3 1B',
       );
     }
   }

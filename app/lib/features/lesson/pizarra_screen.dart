@@ -38,9 +38,8 @@ class _PizarraScreenState extends ConsumerState<PizarraScreen> {
 
   Future<void> _submit([String? text]) async {
     final q = (text ?? _controller.text).trim();
-    final hasImage = ref.read(attachedImageProvider) != null;
-    if (q.isEmpty && !hasImage) return;
-    if (q.isNotEmpty) _controller.text = q;
+    if (q.isEmpty) return;
+    _controller.text = q;
     await ref.read(lessonUiProvider.notifier).ask(q);
   }
 
@@ -71,29 +70,6 @@ class _PizarraScreenState extends ConsumerState<PizarraScreen> {
       }
     } finally {
       if (mounted) setState(() => _listening = false);
-    }
-  }
-
-  Future<void> _pickPhoto(bool camera) async {
-    final picker = ref.read(photoPickerProvider);
-    try {
-      final bytes = camera
-          ? await picker.pickFromCamera()
-          : await picker.pickFromGallery();
-      if (bytes != null) {
-        ref.read(attachedImageProvider.notifier).set(bytes);
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            camera
-                ? 'No pude usar la cámara'
-                : 'No pude abrir la galería',
-          ),
-        ),
-      );
     }
   }
 
@@ -144,7 +120,7 @@ class _PizarraScreenState extends ConsumerState<PizarraScreen> {
               ListTile(
                 leading: const Icon(Icons.refresh),
                 title: const Text('Reintentar auto-install'),
-                subtitle: const Text('Busca .litertlm en Documents de la app'),
+                subtitle: const Text('Busca .task en Documents de la app'),
                 onTap: () {
                   Navigator.pop(ctx);
                   _retryBootstrap();
@@ -192,7 +168,6 @@ class _PizarraScreenState extends ConsumerState<PizarraScreen> {
     final ui = ref.watch(lessonUiProvider);
     final board = ref.watch(boardStateProvider);
     final cursoContexto = ref.watch(pizarraContextProvider);
-    final attached = ref.watch(attachedImageProvider);
     final installProgress = ref.watch(modelInstallProgressProvider);
     final bootAsync = ref.watch(gemmaBootstrapProvider);
     final bootStatus = bootAsync.asData?.value;
@@ -292,35 +267,6 @@ class _PizarraScreenState extends ConsumerState<PizarraScreen> {
                 ],
               ),
             ),
-            if (attached != null) ...[
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(KhipuRadius.sm),
-                    child: Image.memory(
-                      attached,
-                      width: 44,
-                      height: 44,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Foto lista (comprimida)',
-                      style: KhipuTextStyles.body.copyWith(fontSize: 13),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: busy
-                        ? null
-                        : () => ref.read(attachedImageProvider.notifier).clear(),
-                    icon: const Icon(Icons.close, size: 18),
-                  ),
-                ],
-              ),
-            ],
             const SizedBox(height: 12),
             Row(
               children: [
@@ -336,16 +282,6 @@ class _PizarraScreenState extends ConsumerState<PizarraScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                IconButton.filledTonal(
-                  onPressed: busy ? null : () => _pickPhoto(false),
-                  icon: const Icon(Icons.photo_library_outlined),
-                  tooltip: 'Galería',
-                ),
-                IconButton.filledTonal(
-                  onPressed: busy ? null : () => _pickPhoto(true),
-                  icon: const Icon(Icons.photo_camera_outlined),
-                  tooltip: 'Cámara',
-                ),
                 IconButton.filledTonal(
                   onPressed: busy || _listening ? null : _listen,
                   icon: Icon(_listening ? Icons.hearing : Icons.mic),
@@ -521,9 +457,9 @@ class _SidePanel extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const _ModelStatusLine('Gemma-3n E2B-it · int4 (.litertlm)'),
-              const _ModelStatusLine('Motor LiteRT-LM (flutter_gemma)'),
-              const _ModelStatusLine('Inferencia offline (sin cloud)'),
+              const _ModelStatusLine('Gemma 3 1B-IT · int4 (.task)'),
+              const _ModelStatusLine('Motor MediaPipe (flutter_gemma)'),
+              const _ModelStatusLine('Texto only — sin fotos'),
               _ModelStatusLine(
                 gemmaReady ? 'Modelo activo' : 'Falta instalar el modelo',
               ),
