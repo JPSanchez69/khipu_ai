@@ -9,6 +9,13 @@ class GemmaModelConfig {
   static const networkUrl =
       'https://huggingface.co/google/gemma-3n-E2B-it-litert-lm/resolve/main/gemma-3n-E2B-it-int4.litertlm';
 
+  /// URL que `run_web.cmd` expone desde la carpeta local `models/`.
+  /// Chrome no puede abrir una ruta C:\\ directamente, por eso se usa HTTP local.
+  static const localWebUrl = String.fromEnvironment(
+    'GEMMA_MODEL_URL',
+    defaultValue: 'http://127.0.0.1:8765/gemma-3n-E2B-it-int4.litertlm',
+  );
+
   /// Rutas típicas tras adb push / copia del usuario.
   /// Preferir `Android/data/pe.khipu.khipu_ai/files/` (scoped storage).
   static const androidDownloadCandidates = <String>[

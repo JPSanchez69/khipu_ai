@@ -13,6 +13,7 @@ class GemmaModelInstaller {
 
   /// Busca el .litertlm en Descargas del teléfono (flujo Android típico).
   Future<String?> findLocalModelPath() async {
+    if (kIsWeb) return null;
     for (final path in GemmaModelConfig.androidDownloadCandidates) {
       final f = File(path);
       if (await f.exists()) return path;
@@ -38,8 +39,10 @@ class GemmaModelInstaller {
     String absolutePath, {
     void Function(int progress)? onProgress,
   }) async {
-    final builder = FlutterGemma.installModel(modelType: ModelType.gemmaIt)
-        .fromFile(absolutePath);
+    final builder = FlutterGemma.installModel(
+      modelType: ModelType.gemmaIt,
+      fileType: ModelFileType.litertlm,
+    ).fromFile(absolutePath);
     if (onProgress != null) {
       await builder.withProgress(onProgress).install();
     } else {
@@ -51,20 +54,44 @@ class GemmaModelInstaller {
   /// Descarga opcional por Wi‑Fi (requiere token HF si el repo es gated).
   Future<void> installFromNetwork({
     String? hfToken,
+    String? url,
     void Function(int progress)? onProgress,
   }) async {
-    final token = hfToken ??
-        const String.fromEnvironment('HUGGINGFACE_TOKEN', defaultValue: '');
-    final builder = FlutterGemma.installModel(modelType: ModelType.gemmaIt)
-        .fromNetwork(
-      GemmaModelConfig.networkUrl,
-      token: token.isEmpty ? null : token,
-    );
+    final token =
+        hfToken ??
+        (url == null
+            ? const String.fromEnvironment(
+                'HUGGINGFACE_TOKEN',
+                defaultValue: '',
+              )
+            : '');
+    final builder =
+        FlutterGemma.installModel(
+          modelType: ModelType.gemmaIt,
+          fileType: ModelFileType.litertlm,
+        ).fromNetwork(
+          url ?? GemmaModelConfig.networkUrl,
+          token: token.isEmpty ? null : token,
+        );
     if (onProgress != null) {
       await builder.withProgress(onProgress).install();
     } else {
       await builder.install();
     }
     debugPrint('Khipu: modelo instalado desde red');
+  }
+
+  /// Copia el modelo servido por `run_web.cmd` al almacenamiento persistente
+  /// (OPFS) del navegador. Solo se necesita la primera vez por perfil de Chrome.
+  Future<void> installLocalWeb({void Function(int progress)? onProgress}) {
+    if (!kIsWeb) {
+      throw UnsupportedError(
+        'La instalación web local solo funciona en Chrome',
+      );
+    }
+    return installFromNetwork(
+      url: GemmaModelConfig.localWebUrl,
+      onProgress: onProgress,
+    );
   }
 }

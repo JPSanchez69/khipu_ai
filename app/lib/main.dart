@@ -14,8 +14,9 @@ Future<void> main() async {
   // LiteRT-LM para gemma-3n-E2B-it-*.litertlm (visión on-device).
   // Sin modelo instalado, GemmaTeacherAi cae a fixtures automáticamente.
   try {
-    FlutterGemma.initialize(
+    await FlutterGemma.initialize(
       inferenceEngines: [LiteRtLmEngine()],
+      webStorageMode: WebStorageMode.streaming,
     );
   } catch (e) {
     debugPrint('Khipu: FlutterGemma.initialize omitido: $e');

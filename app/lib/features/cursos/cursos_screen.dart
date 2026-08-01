@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/di/navigation_providers.dart';
+import '../../core/di/providers.dart';
 import '../../core/theme/khipu_colors.dart';
 import '../../core/theme/khipu_text_styles.dart';
 import '../../core/theme/khipu_theme.dart';
@@ -72,8 +73,7 @@ class _CursosScreenState extends ConsumerState<CursosScreen> {
             _NivelChip(
               label: '🧑 Secundaria',
               selected: _filtro == NivelEducativo.secundaria,
-              onTap: () =>
-                  setState(() => _filtro = NivelEducativo.secundaria),
+              onTap: () => setState(() => _filtro = NivelEducativo.secundaria),
             ),
           ],
         ),
@@ -201,12 +201,9 @@ class _CourseCard extends ConsumerWidget {
           onTap: bloqueado
               ? null
               : () {
-                  ref
-                      .read(pizarraContextProvider.notifier)
-                      .set(curso.titulo);
-                  ref
-                      .read(activeTabProvider.notifier)
-                      .set(ShellTab.pizarra);
+                  ref.read(pizarraContextProvider.notifier).set(curso.titulo);
+                  ref.read(activeChatIdProvider.notifier).set(null);
+                  ref.read(activeTabProvider.notifier).set(ShellTab.pizarra);
                 },
           child: Container(
             padding: const EdgeInsets.all(18),

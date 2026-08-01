@@ -31,6 +31,17 @@
 
   <title>khipu_ai</title>
   <link rel="manifest" href="manifest.json">
+  <!-- Helpers requeridos por flutter_gemma para Cache API y OPFS. -->
+  <script src="cache_api.js"></script>
+  <script src="opfs_helper.js"></script>
+  <!-- LiteRT-LM web. Expone Engine antes de que flutter_gemma lo use. -->
+  <script type="module">
+    window.litertLmReady = (async () => {
+      const module = await import('https://cdn.jsdelivr.net/npm/@litert-lm/core@0.14.0/+esm');
+      window.Engine = module.Engine;
+      return module.Engine;
+    })();
+  </script>
 </head>
 <body>
   <!--

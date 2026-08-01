@@ -48,7 +48,9 @@ class GemmaTeacherAi implements TeacherAiPort {
     _initAttempted = true;
     if (!FlutterGemma.hasActiveModel()) {
       _ready = false;
-      debugPrint('Khipu: sin modelo activo (instala gemma-3n-E2B-it-litert-lm).');
+      debugPrint(
+        'Khipu: sin modelo activo (instala gemma-3n-E2B-it-litert-lm).',
+      );
       return;
     }
 
@@ -57,18 +59,21 @@ class GemmaTeacherAi implements TeacherAiPort {
     } catch (_) {}
     _model = null;
 
-    // Multimodal + gama media: GPU primero; CPU si falla (OOM / sin OpenCL).
-    for (final backend in [PreferredBackend.gpu, PreferredBackend.cpu]) {
+    // LiteRT-LM web es texto + GPU. Android también puede intentar CPU.
+    final backends = kIsWeb
+        ? const [PreferredBackend.gpu]
+        : const [PreferredBackend.gpu, PreferredBackend.cpu];
+    for (final backend in backends) {
       try {
         _model = await FlutterGemma.getActiveModel(
           maxTokens: maxTokens,
           preferredBackend: backend,
-          supportImage: true,
+          supportImage: !kIsWeb,
           maxNumImages: GemmaModelConfig.maxNumImages,
         );
         _ready = true;
-        _vision = true;
-        debugPrint('Khipu: Gemma E2B listo ($backend, vision=true)');
+        _vision = !kIsWeb;
+        debugPrint('Khipu: Gemma E2B listo ($backend, vision=$_vision)');
         return;
       } catch (e, st) {
         debugPrint('Khipu: getActiveModel($backend) falló: $e');
@@ -100,10 +105,7 @@ class GemmaTeacherAi implements TeacherAiPort {
         systemInstruction: TeacherPrompts.system,
       );
 
-      final prompt = TeacherPrompts.userQuestion(
-        request.question,
-        hasImage: needVision,
-      );
+      final prompt = TeacherPrompts.userQuestion(request, hasImage: needVision);
       final message = needVision
           ? Message.withImage(
               text: prompt,
