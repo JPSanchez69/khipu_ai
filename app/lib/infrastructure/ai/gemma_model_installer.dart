@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
 
@@ -8,6 +10,28 @@ class GemmaModelInstaller {
   const GemmaModelInstaller();
 
   bool get hasActiveModel => FlutterGemma.hasActiveModel();
+
+  /// Busca el .litertlm en Descargas del teléfono (flujo Android típico).
+  Future<String?> findLocalModelPath() async {
+    for (final path in GemmaModelConfig.androidDownloadCandidates) {
+      final f = File(path);
+      if (await f.exists()) return path;
+    }
+    return null;
+  }
+
+  /// Instala desde Descargas si el archivo ya está en el dispositivo.
+  Future<void> installFromDownloads({
+    void Function(int progress)? onProgress,
+  }) async {
+    final path = await findLocalModelPath();
+    if (path == null) {
+      throw StateError(
+        'No se encontró ${GemmaModelConfig.fileName} en Descargas',
+      );
+    }
+    await installFromFile(path, onProgress: onProgress);
+  }
 
   /// Instala desde ruta absoluta en el dispositivo (recomendado offline).
   Future<void> installFromFile(
