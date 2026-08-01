@@ -1,12 +1,17 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application/ask_question.dart';
 import '../../application/lesson_player.dart';
 import '../../domain/lesson_script/board_state.dart';
+import '../../domain/ports/photo_picker_port.dart';
 import '../../domain/ports/teacher_ai_port.dart';
 import '../../domain/ports/voice_ports.dart';
+import '../../infrastructure/ai/gemma_model_installer.dart';
 import '../../infrastructure/ai/gemma_teacher_ai.dart';
 import '../../infrastructure/ai/stub_teacher_ai.dart';
+import '../../infrastructure/media/image_picker_photo_service.dart';
 import '../../infrastructure/voice/flutter_tts_service.dart';
 import '../../infrastructure/voice/speech_to_text_service.dart';
 
@@ -21,13 +26,49 @@ class UseGemmaNotifier extends Notifier<bool> {
   void set(bool value) => state = value;
 }
 
+final gemmaInstallerProvider = Provider<GemmaModelInstaller>((ref) {
+  return const GemmaModelInstaller();
+});
+
 final teacherAiProvider = Provider<TeacherAiPort>((ref) {
   final useGemma = ref.watch(useGemmaProvider);
   if (useGemma) {
-    return GemmaTeacherAi();
+    final gemma = GemmaTeacherAi();
+    ref.onDispose(gemma.dispose);
+    return gemma;
   }
   return StubTeacherAi();
 });
+
+final photoPickerProvider = Provider<PhotoPickerPort>((ref) {
+  return ImagePickerPhotoService();
+});
+
+final attachedImageProvider =
+    NotifierProvider<AttachedImageNotifier, Uint8List?>(
+  AttachedImageNotifier.new,
+);
+
+class AttachedImageNotifier extends Notifier<Uint8List?> {
+  @override
+  Uint8List? build() => null;
+
+  void set(Uint8List? bytes) => state = bytes;
+
+  void clear() => state = null;
+}
+
+final modelInstallProgressProvider =
+    NotifierProvider<ModelInstallProgressNotifier, int?>(
+  ModelInstallProgressNotifier.new,
+);
+
+class ModelInstallProgressNotifier extends Notifier<int?> {
+  @override
+  int? build() => null;
+
+  void set(int? value) => state = value;
+}
 
 final ttsProvider = Provider<TtsPort>((ref) {
   final tts = FlutterTtsService();
@@ -72,18 +113,21 @@ class LessonUiState {
     this.statusMessage = 'Pregúntame algo. Te lo explico en la pizarra.',
     this.errorMessage,
     this.lessonTitle,
+    this.engineHint,
   });
 
   final LessonPhase phase;
   final String statusMessage;
   final String? errorMessage;
   final String? lessonTitle;
+  final String? engineHint;
 
   LessonUiState copyWith({
     LessonPhase? phase,
     String? statusMessage,
     String? errorMessage,
     String? lessonTitle,
+    String? engineHint,
     bool clearError = false,
   }) {
     return LessonUiState(
@@ -91,6 +135,7 @@ class LessonUiState {
       statusMessage: statusMessage ?? this.statusMessage,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       lessonTitle: lessonTitle ?? this.lessonTitle,
+      engineHint: engineHint ?? this.engineHint,
     );
   }
 }
@@ -106,16 +151,26 @@ class LessonUiNotifier extends Notifier<LessonUiState> {
     final ask = ref.read(askQuestionProvider);
     final player = ref.read(lessonPlayerProvider);
     final board = ref.read(boardStateProvider.notifier);
+    final image = ref.read(attachedImageProvider);
+    final useGemma = ref.read(useGemmaProvider);
+    final teacher = ref.read(teacherAiProvider);
+
+    final ready = useGemma ? await teacher.isReady() : true;
+    final hint = !useGemma
+        ? 'Stub'
+        : (ready ? 'Gemma E2B' : 'Gemma (sin modelo → fixtures)');
 
     state = state.copyWith(
       phase: LessonPhase.thinking,
       statusMessage: 'Pensando cómo enseñártelo…',
+      engineHint: hint,
       clearError: true,
     );
     board.clear();
 
     try {
-      final script = await ask(question);
+      final script = await ask(question, imageJpeg: image);
+      ref.read(attachedImageProvider.notifier).clear();
       state = state.copyWith(
         phase: LessonPhase.playing,
         lessonTitle: script.title,
@@ -133,6 +188,7 @@ class LessonUiNotifier extends Notifier<LessonUiState> {
         statusMessage: '¿Otra pregunta?',
       );
     } catch (e) {
+      ref.read(attachedImageProvider.notifier).clear();
       state = state.copyWith(
         phase: LessonPhase.error,
         errorMessage: 'No pude armar la lección. Intenta de nuevo.',

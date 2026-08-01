@@ -1,8 +1,10 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/di/providers.dart';
 import '../../core/theme/khipu_theme.dart';
+import '../../infrastructure/ai/gemma_teacher_ai.dart';
 import '../lesson/whiteboard/whiteboard_canvas.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -30,8 +32,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<void> _submit([String? text]) async {
     final q = (text ?? _controller.text).trim();
-    if (q.isEmpty) return;
-    _controller.text = q;
+    final hasImage = ref.read(attachedImageProvider) != null;
+    if (q.isEmpty && !hasImage) return;
+    if (q.isNotEmpty) _controller.text = q;
     await ref.read(lessonUiProvider.notifier).ask(q);
   }
 
@@ -49,13 +52,133 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
+  Future<void> _pickPhoto(bool camera) async {
+    final picker = ref.read(photoPickerProvider);
+    final bytes =
+        camera ? await picker.pickFromCamera() : await picker.pickFromGallery();
+    if (bytes != null) {
+      ref.read(attachedImageProvider.notifier).set(bytes);
+    }
+  }
+
+  Future<void> _installModelFromFile() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.any,
+      allowMultiple: false,
+      withData: false,
+    );
+    final path = result?.files.single.path;
+    if (path == null) return;
+    if (!path.toLowerCase().endsWith('.litertlm')) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Elige un archivo .litertlm (gemma-3n-E2B-it-int4)'),
+        ),
+      );
+      return;
+    }
+
+    final progress = ref.read(modelInstallProgressProvider.notifier);
+    progress.set(0);
+    try {
+      await ref.read(gemmaInstallerProvider).installFromFile(
+            path,
+            onProgress: progress.set,
+          );
+      ref.invalidate(teacherAiProvider);
+      ref.read(useGemmaProvider.notifier).set(true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Modelo Gemma E2B instalado')),
+      );
+    } catch (e) {
+      debugPrint('Khipu: install from file failed: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se pudo instalar el modelo. Intenta de nuevo.'),
+        ),
+      );
+    } finally {
+      progress.set(null);
+    }
+  }
+
+  Future<void> _installModelFromNetwork() async {
+    final progress = ref.read(modelInstallProgressProvider.notifier);
+    progress.set(0);
+    try {
+      await ref.read(gemmaInstallerProvider).installFromNetwork(
+            onProgress: progress.set,
+          );
+      ref.invalidate(teacherAiProvider);
+      ref.read(useGemmaProvider.notifier).set(true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Modelo descargado e instalado')),
+      );
+    } catch (e) {
+      debugPrint('Khipu: install from network failed: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Descarga falló. Usa archivo local o revisa el token HF.',
+          ),
+        ),
+      );
+    } finally {
+      progress.set(null);
+    }
+  }
+
+  void _showModelMenu() {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.folder_open),
+                title: const Text('Instalar desde archivo .litertlm'),
+                subtitle: const Text('gemma-3n-E2B-it-int4.litertlm en el teléfono'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _installModelFromFile();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.cloud_download_outlined),
+                title: const Text('Descargar una vez (Wi‑Fi)'),
+                subtitle: const Text('Requiere acceso HF + token opcional'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _installModelFromNetwork();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final ui = ref.watch(lessonUiProvider);
     final board = ref.watch(boardStateProvider);
     final useGemma = ref.watch(useGemmaProvider);
+    final attached = ref.watch(attachedImageProvider);
+    final installProgress = ref.watch(modelInstallProgressProvider);
     final busy = ui.phase == LessonPhase.thinking ||
-        ui.phase == LessonPhase.playing;
+        ui.phase == LessonPhase.playing ||
+        installProgress != null;
+
+    final installer = ref.watch(gemmaInstallerProvider);
+    final gemmaReady = useGemma && installer.hasActiveModel;
 
     return Scaffold(
       body: SafeArea(
@@ -72,22 +195,49 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       style: Theme.of(context).textTheme.headlineMedium,
                     ),
                   ),
+                  IconButton(
+                    tooltip: 'Instalar modelo Gemma',
+                    onPressed: busy ? null : _showModelMenu,
+                    icon: const Icon(Icons.model_training_outlined),
+                  ),
                   FilterChip(
-                    label: Text(useGemma ? 'Gemma' : 'Stub'),
+                    label: Text(
+                      useGemma
+                          ? (gemmaReady ? 'Gemma' : 'Gemma…')
+                          : 'Stub',
+                    ),
                     selected: useGemma,
                     onSelected: busy
                         ? null
-                        : (v) => ref.read(useGemmaProvider.notifier).set(v),
+                        : (v) {
+                            ref.read(useGemmaProvider.notifier).set(v);
+                            final t = ref.read(teacherAiProvider);
+                            if (t is GemmaTeacherAi) t.invalidate();
+                          },
                   ),
                 ],
               ),
               const SizedBox(height: 4),
               Text(
-                'Tu profesor en el bolsillo — sin internet',
+                useGemma && !gemmaReady
+                    ? 'Gemma no listo — usa Stub o instala el .litertlm'
+                    : 'Tu profesor en el bolsillo — sin internet',
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: KhipuTheme.leaf,
                     ),
               ),
+              if (installProgress != null) ...[
+                const SizedBox(height: 8),
+                LinearProgressIndicator(value: installProgress / 100),
+                Text('Instalando modelo… $installProgress%'),
+              ],
+              if (ui.engineHint != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Motor: ${ui.engineHint}',
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
+              ],
               const SizedBox(height: 16),
               Expanded(
                 flex: 5,
@@ -153,6 +303,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   },
                 ),
               ),
+              if (attached != null) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.memory(
+                        attached,
+                        width: 56,
+                        height: 56,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(child: Text('Foto lista (comprimida)')),
+                    IconButton(
+                      onPressed: busy
+                          ? null
+                          : () =>
+                              ref.read(attachedImageProvider.notifier).clear(),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -167,20 +342,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 4),
+                  IconButton.filledTonal(
+                    onPressed: busy ? null : () => _pickPhoto(false),
+                    icon: const Icon(Icons.photo_library_outlined),
+                    tooltip: 'Galería',
+                  ),
+                  IconButton.filledTonal(
+                    onPressed: busy ? null : () => _pickPhoto(true),
+                    icon: const Icon(Icons.photo_camera_outlined),
+                    tooltip: 'Cámara',
+                  ),
                   IconButton.filledTonal(
                     onPressed: busy || _listening ? null : _listen,
                     icon: Icon(_listening ? Icons.hearing : Icons.mic),
                     tooltip: 'Hablar',
                   ),
                   const SizedBox(width: 4),
-                  if (busy)
+                  if (busy && installProgress == null)
                     IconButton.filled(
                       onPressed: () =>
                           ref.read(lessonUiProvider.notifier).stop(),
                       icon: const Icon(Icons.stop),
                     )
-                  else
+                  else if (!busy)
                     IconButton.filled(
                       onPressed: () => _submit(),
                       icon: const Icon(Icons.send_rounded),

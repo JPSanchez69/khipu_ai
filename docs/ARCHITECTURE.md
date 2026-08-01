@@ -4,59 +4,72 @@
 
 ### Runtime on-device (4–8 GB RAM)
 
-| Opción | Ventajas | Desventajas | Decisión MVP |
-|--------|----------|-------------|-------------|
-| **Gemma 3 1B int4 + flutter_gemma (MediaPipe `.task`)** | ~0.5–0.8 GB disco, ~0.8–1.4 GB RAM pico; API Flutter; offline | Calidad menor que E2B/E4B; vision limitada | **Elegida para floor 4 GB** |
-| Gemma 3n / Gemma 4 E2B | Multimodal, mejor calidad | 2.4–3 GB+; OOM frecuente en 4 GB | Solo en dispositivos ≥6 GB (futuro flag) |
-| llama.cpp / GGUF | Control fino cuantización | Integración Flutter más pesada (FFI) | Alternativa si MediaPipe falla |
-| ONNX Runtime GenAI | Portable | Ecosistema Gemma móvil menos maduro en Flutter | No MVP |
-| Cloud FastAPI | Fácil | Rompe promesa offline | **Fuera de MVP** |
+| Opción | Ventajas | Desventajas | Decisión actual |
+|--------|----------|-------------|-----------------|
+| **Gemma 3n E2B int4 LiteRT-LM** (`gemma-3n-E2B-it-litert-lm`) | Multimodal (texto+imagen), mejor calidad pedagógica | ~3 GB disco; OOM frecuente en 4 GB | **Elegida** (instalación local, no en APK) |
+| Gemma 3 1B int4 MediaPipe `.task` | Cabe en 4 GB | Sin visión útil | Fallback histórico / floor extremo |
+| llama.cpp / GGUF | Control fino cuantización | FFI más pesado en Flutter | Alternativa si LiteRT falla |
+| Cloud FastAPI | Fácil | Rompe offline | **Fuera de producto** |
 
-**Kill criteria:** pico modelo+app > ~2.5–3 GB en teléfono 4 GB → bajar a stub + lecciones fixture, o modelo 270M, nunca añadir modalidades.
+**Kill criteria:** OOM o fallo de carga E2B → **Stub + fixtures** sin crash. Imágenes siempre redimensionadas (lado máx. 640). No empaquetar pesos en el APK.
+
+**Runtime:** `flutter_gemma` + `flutter_gemma_litertlm` (`LiteRtLmEngine`). Backend: GPU con fallback CPU.
 
 ### App architecture
 
 ```
 presentation (Flutter UI + Riverpod)
     ↓
-application (use cases: AskQuestion, PlayLesson)
+application (AskQuestion, PlayLesson)
     ↓
-domain (LessonScript, BoardState, TeacherPort)
+domain (LessonScript, BoardState, TeacherPort, PhotoPicker)
     ↓
-infrastructure (StubTeacher, GemmaTeacher, Tts, Stt, fixtures)
+infrastructure (StubTeacher, GemmaTeacher, ImagePrep, Tts, Stt, fixtures)
 ```
 
 - **Clean Architecture** + **feature-first** bajo `lib/features/` y núcleo en `lib/core/`.
-- **Offline-first:** sin red para inferir; el modelo puede descargarse una vez (documentado).
-- **Puerto `TeacherAiPort`:** stub ↔ Gemma sin tocar UI.
+- **Offline-first:** sin red para inferir; modelo instalable una vez (archivo o Wi‑Fi).
+- **Puerto `TeacherAiPort`:** stub ↔ Gemma; `TeachRequest` admite JPEG opcional.
 
 ### LessonScript DSL v0.1
 
 JSON versionado (`schemaVersion: "0.1"`). Acciones:
 
-`writeText`, `drawShape`, `drawArrow`, `highlight`, `move`, `erase`, `timeline`, `conceptNode`, `wait`, `speakCue`, `askSocratic`.
+`writeText`, `drawShape`, `drawArrow`, `highlight`, `move`, `erase`,
+`timeline`, `conceptNode`, `wait`, `speakCue`, `askSocratic`.
 
-Flutter interpreta y anima; el modelo emite JSON (con reparación tolerante).
+Flutter interpreta y anima; el modelo emite JSON (reparación tolerante).
+
+### Multimodal
+
+- Entrada: texto, STT y/o **una foto** (cámara/galería).
+- Pipeline: `ImagePrep` → JPEG ≤640px → `Message.withImage` si hay modelo.
+- Sin PDF en este slice.
+
+### TTS
+
+- `flutter_tts` del sistema: voz ES preferida (`es-MX`/`es-ES`), rate/pitch suaves, **chunking** por oraciones (`TtsChunker`), `awaitSpeakCompletion`.
+- Sin TTS neuronal (presupuesto RAM compartido con E2B).
 
 ### Memoria y rendimiento
 
-- Contexto corto (preguntas + system prompt compacto).
-- Streaming de tokens → parseo incremental cuando sea posible; MVP: JSON completo luego play.
-- Canvas: lista de elementos inmutables + `CustomPainter`; animaciones 200–600 ms.
-- TTS no bloquea el player (cues por `speakCue` / `wait`).
+- Contexto corto (`maxTokens` 1024).
+- Una imagen por turno; cerrar chat tras inferir.
+- Canvas: elementos inmutables + `CustomPainter`.
+- Android `largeHeap=true`; OpenCL opcional.
 
 ### minSdk
 
-Android **minSdk 26** (requisito típico MediaPipe GenAI / flutter_gemma). Documentado; targetSdk actual Flutter.
+Android **minSdk 26**; LiteRT-LM FFI es **arm64-v8a**.
 
 ### Seguridad / menores
 
-- Sin telemetría PII en MVP.
-- Sin cuentas ni cloud.
-- Cámara/galería solo detrás de puerto (P1/P2); foto no en P0.
+- Sin telemetría PII.
+- Sin cuentas ni cloud de inferencia.
+- Cámara/galería detrás de `PhotoPickerPort`.
 
 ### Limitaciones honestas
 
-- P0 puede demostar con **StubTeacher** si el modelo no está en el dispositivo.
-- Foto/PDF = P2 no implementado en código de producto (puertos preparados).
-- Calidad pedagógica del modelo 1B es limitada; fixtures garantizan la demo.
+- Demo siempre posible con **StubTeacher**.
+- E2B en 4 GB es best-effort; fixtures garantizan la experiencia.
+- Calidad TTS limitada al motor del sistema del dispositivo.

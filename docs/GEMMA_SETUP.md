@@ -1,20 +1,68 @@
-# Instalación del modelo Gemma (opcional)
+# Instalación del modelo Gemma 3n E2B (opcional)
 
 El MVP funciona **sin modelo** (chip **Stub**): lecciones fixture + pizarra + TTS/STT.
 
-Para on-device real (chip **Gemma**):
+Modelo objetivo: **`gemma-3n-E2B-it-litert-lm`** → archivo  
+`gemma-3n-E2B-it-int4.litertlm` (multimodal texto+imagen).
 
-1. Dispositivo Android **minSdk 26**, idealmente **6–8 GB RAM**. En **4 GB** usar solo **Gemma 3 1B int4** (~0.5–0.8 GB).
-2. Instalar el modelo una vez (Wi‑Fi), luego modo avión.
-3. Runtime: `flutter_gemma` + `flutter_gemma_mediapipe` (`.task` / `.bin`).
-4. Si `FlutterGemma.getActiveModel` falla, la app **cae a fixtures** automáticamente.
+**No** se empaqueta en el APK (~3 GB). Instalación local o descarga una vez.
 
-Ejemplo de instalación (código / docs flutter_gemma):
+## Requisitos
+
+1. Android **minSdk 26**, **arm64-v8a**. Ideal **≥6 GB RAM**. En **4 GB** es frecuente OOM → la app cae a fixtures sin crash.
+2. Runtime: `flutter_gemma` + **`flutter_gemma_litertlm`** (`.litertlm` / LiteRT-LM).
+3. Repo gated en Hugging Face: pide acceso a  
+   [google/gemma-3n-E2B-it-litert-lm](https://huggingface.co/google/gemma-3n-E2B-it-litert-lm).
+
+## Opción A — Archivo en el teléfono (recomendado)
+
+1. Descarga `gemma-3n-E2B-it-int4.litertlm` (PC o teléfono).
+2. En la app: icono de modelo → **Instalar desde archivo .litertlm**.
+3. Activa el chip **Gemma**. Luego puedes usar modo avión.
+
+Equivalente en código:
 
 ```dart
 await FlutterGemma.installModel(modelType: ModelType.gemmaIt)
-  .fromNetwork('<url-del-modelo-1b-int4>')
+  .fromFile('/ruta/absoluta/gemma-3n-E2B-it-int4.litertlm')
   .install();
 ```
 
-**No** empaquetar E2B/E4B en el APK de demo 4 GB (OOM).
+## Opción B — Descarga Wi‑Fi (una vez)
+
+Token HF (repo gated):
+
+```bash
+flutter run --dart-define=HUGGINGFACE_TOKEN=hf_xxx
+```
+
+En la app: **Descargar una vez (Wi‑Fi)**, o:
+
+```dart
+await FlutterGemma.installModel(modelType: ModelType.gemmaIt)
+  .fromNetwork(
+    'https://huggingface.co/google/gemma-3n-E2B-it-litert-lm/resolve/main/gemma-3n-E2B-it-int4.litertlm',
+    token: 'hf_xxx',
+  )
+  .withProgress((p) => print('$p%'))
+  .install();
+```
+
+## Multimodal (foto)
+
+- Cámara o galería → resize lado máx. **640 px**, JPEG ~75%.
+- Una imagen por pregunta. Texto y/o STT siguen disponibles.
+- Si no hay modelo / OOM → fixtures.
+
+## Fallback
+
+Si `FlutterGemma.hasActiveModel()` es false o `getActiveModel` / inferencia fallan, **Stub/fixtures** automáticamente. El chip puede decir **Gemma…** (no listo).
+
+## Gama baja / media-baja
+
+| Presupuesto | Comportamiento |
+|-------------|----------------|
+| Disco | ~3 GB para el `.litertlm` (fuera del APK) |
+| RAM pico | ~2.4–3 GB+ con visión; `largeHeap`; GPU→CPU |
+| Contexto | `maxTokens` 1024, `maxOutputTokens` 768 |
+| Kill | OOM → fixtures; no crashear la demo Stub |
