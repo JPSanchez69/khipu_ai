@@ -11,5 +11,6 @@ void main() {
     expect(GemmaModelConfig.fileName, 'gemma3-1b-it-int4.task');
     expect(GemmaModelConfig.repoId, 'litert-community/Gemma3-1B-IT');
     expect(GemmaModelConfig.maxTokens, 2048);
+    expect(GemmaModelConfig.maxOutputTokens, 384);
   });
 }

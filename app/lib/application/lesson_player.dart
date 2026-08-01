@@ -42,10 +42,10 @@ class LessonPlayer {
         switch (action) {
           case SpeakCueAction a:
             onStatus?.call(a.text);
-            await _tts.speak(a.text);
+            await _speakSafe(a.text);
           case AskSocraticAction a:
             onStatus?.call(a.prompt);
-            await _tts.speak(a.prompt);
+            await _speakSafe(a.prompt);
             if (!_cancelled && action.durationMs > 0) {
               await Future<void>.delayed(
                 Duration(milliseconds: action.durationMs.clamp(0, 2500)),
@@ -61,6 +61,14 @@ class LessonPlayer {
       }
     } finally {
       _playing = false;
+    }
+  }
+
+  Future<void> _speakSafe(String text) async {
+    try {
+      await _tts.speak(text);
+    } catch (_) {
+      // TTS no debe abortar la pizarra en demo.
     }
   }
 

@@ -17,7 +17,8 @@ class GemmaModelConfig {
   /// Contexto texto (1B no multimodal).
   static const maxTokens = 2048;
 
-  static const maxOutputTokens = 768;
+  /// Salida corta: fuerza JSON LessonScript compacto en 1B.
+  static const maxOutputTokens = 384;
 
   /// Prep de fotos (galeria/camara); el picker sigue redimensionando.
   static const maxImageSide = 640;

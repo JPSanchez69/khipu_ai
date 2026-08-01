@@ -153,18 +153,14 @@ class LessonUiNotifier extends Notifier<LessonUiState> {
     final ask = ref.read(askQuestionProvider);
     final player = ref.read(lessonPlayerProvider);
     final board = ref.read(boardStateProvider.notifier);
-    final boot = ref.read(gemmaBootstrapProvider);
 
-    final bootHint = boot.maybeWhen(
-      data: (s) => switch (s) {
-        GemmaReady() => 'Gemma 3 1B',
-        GemmaNotInstalled() => 'Gemma no listo (sin modelo)',
-        GemmaFailed(:final reason) => 'Gemma falló: $reason',
-        GemmaInstalling(:final progress) => 'Instalando… $progress%',
-      },
-      loading: () => 'Preparando Gemma…',
-      orElse: () => 'Preparando Gemma…',
-    );
+    GemmaStatus? bootStatus;
+    try {
+      bootStatus = await ref.read(gemmaBootstrapProvider.future);
+    } catch (_) {
+      bootStatus = null;
+    }
+    final bootHint = _bootHint(bootStatus);
 
     state = state.copyWith(
       phase: LessonPhase.thinking,
@@ -206,16 +202,27 @@ class LessonUiNotifier extends Notifier<LessonUiState> {
         phase: LessonPhase.error,
         errorMessage: e.message,
         statusMessage: 'Gemma no pudo enseñar',
-        engineHint: 'Gemma 3 1B',
+        engineHint: bootHint,
       );
     } catch (e) {
       state = state.copyWith(
         phase: LessonPhase.error,
-        errorMessage: 'No pude armar la lección. Intenta de nuevo.',
+        errorMessage:
+            'No pude armar la lección en la pizarra. Intenta de nuevo.',
         statusMessage: 'Hubo un problema',
-        engineHint: 'Gemma 3 1B',
+        engineHint: bootHint,
       );
     }
+  }
+
+  String _bootHint(GemmaStatus? status) {
+    return switch (status) {
+      GemmaReady() => 'Gemma 3 1B',
+      GemmaNotInstalled() => 'Gemma no listo (sin modelo)',
+      GemmaFailed(:final reason) => 'Gemma falló: $reason',
+      GemmaInstalling(:final progress) => 'Instalando… $progress%',
+      null => 'Preparando Gemma…',
+    };
   }
 
   Future<void> stop() async {

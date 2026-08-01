@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
 
+import '../../domain/lesson_script/lesson_action.dart';
 import '../../domain/lesson_script/lesson_script_parser.dart';
+import '../../domain/lesson_script/lesson_script_quality.dart';
 import '../../domain/ports/teacher_ai_port.dart';
 import 'gemma_model_config.dart';
 import 'teacher_prompts.dart';
@@ -79,16 +81,23 @@ class GemmaTeacherAi implements TeacherAiPort {
     throw TeacherAiException(message, cause: cause);
   }
 
+  /// Parse + calidad jugable (tests / teach).
+  LessonScript parsePlayable(String raw) {
+    final script = _parser.parseLenient(raw);
+    LessonScriptQuality.ensurePlayable(script);
+    return script;
+  }
+
   @override
   Future<LessonResult> teach(TeachRequest request) async {
     if (request.hasImage) {
-      _fail('Este modelo no admite fotos.');
+      _fail('Este modelo no admite fotos. Escribe la pregunta en texto.');
     }
 
     await _ensureModel();
     if (!_ready || _model == null) {
       _fail(
-        'Gemma no está listo. Instala el modelo (.task) con push_model.ps1.',
+        'Gemma no está listo. Instala gemma3-1b-it-int4.task con push_model.ps1.',
         cause: _lastInitError,
       );
     }
@@ -104,32 +113,31 @@ class GemmaTeacherAi implements TeacherAiPort {
         systemInstruction: TeacherPrompts.system,
       );
 
-      final prompt = TeacherPrompts.userQuestion(
-        request.question,
-        hasImage: false,
+      final first = await _generateOnce(
+        chat!,
+        TeacherPrompts.userQuestion(request.question),
       );
-      final message = Message.text(text: prompt, isUser: true);
-
-      await chat.addQueryChunk(message);
-      final response = await chat.generateChatResponse();
-      final text = switch (response) {
-        TextResponse(:final token) => token,
-        _ => response.toString(),
-      };
-      if (text.trim().isEmpty) {
-        _fail('Gemma devolvió una lección vacía. Intenta de nuevo.');
-      }
       try {
-        final script = _parser.parseLenient(text);
+        final script = parsePlayable(first);
         return LessonResult(
           script: script,
           engine: TeacherEngineKind.gemma,
         );
-      } catch (e) {
-        _fail(
-          'Gemma devolvió una lección inválida. Intenta otra pregunta.',
-          cause: e,
-        );
+      } catch (firstError) {
+        debugPrint('Khipu: LessonScript inválido, reintento: $firstError');
+        final second = await _generateOnce(chat, TeacherPrompts.retryHint);
+        try {
+          final script = parsePlayable(second);
+          return LessonResult(
+            script: script,
+            engine: TeacherEngineKind.gemma,
+          );
+        } catch (e) {
+          _fail(
+            'Gemma no armó una lección para la pizarra. Intenta otra pregunta.',
+            cause: e,
+          );
+        }
       }
     } catch (e) {
       if (e is TeacherAiException) rethrow;
@@ -143,6 +151,19 @@ class GemmaTeacherAi implements TeacherAiPort {
     } finally {
       await chat?.close();
     }
+  }
+
+  Future<String> _generateOnce(InferenceChat chat, String userText) async {
+    await chat.addQueryChunk(Message.text(text: userText, isUser: true));
+    final response = await chat.generateChatResponse();
+    final text = switch (response) {
+      TextResponse(:final token) => token,
+      _ => response.toString(),
+    };
+    if (text.trim().isEmpty) {
+      _fail('Gemma devolvió una lección vacía. Intenta de nuevo.');
+    }
+    return text;
   }
 
   Future<void> dispose() async {

@@ -7,6 +7,7 @@ import 'package:khipu_ai/domain/lesson_script/board_state.dart';
 import 'package:khipu_ai/domain/lesson_script/lesson_action.dart';
 import 'package:khipu_ai/domain/ports/teacher_ai_port.dart';
 import 'package:khipu_ai/domain/ports/voice_ports.dart';
+import 'package:khipu_ai/infrastructure/ai/gemma_status.dart';
 
 class _FailingTeacher implements TeacherAiPort {
   @override
@@ -66,6 +67,7 @@ void main() {
   test('LessonUiNotifier: fallo Gemma no reproduce ni llena pizarra', () async {
     final container = ProviderContainer(
       overrides: [
+        gemmaBootstrapProvider.overrideWith((ref) async => const GemmaReady()),
         teacherAiProvider.overrideWithValue(_FailingTeacher()),
         askQuestionProvider.overrideWithValue(AskQuestion(_FailingTeacher())),
         ttsProvider.overrideWithValue(_SilentTts()),
