@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/di/navigation_providers.dart';
@@ -6,6 +7,8 @@ import '../../core/di/providers.dart';
 import '../../core/theme/khipu_colors.dart';
 import '../../core/theme/khipu_text_styles.dart';
 import '../../core/theme/khipu_theme.dart';
+import '../../domain/ports/voice_ports.dart';
+import '../../infrastructure/ai/gemma_status.dart';
 import '../../infrastructure/ai/gemma_teacher_ai.dart';
 import 'whiteboard/whiteboard_canvas.dart';
 
@@ -50,6 +53,22 @@ class _PizarraScreenState extends ConsumerState<PizarraScreen> {
       if (heard != null && heard.isNotEmpty) {
         _controller.text = heard;
         await _submit(heard);
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No te escuché. Intenta de nuevo.')),
+        );
+      }
+    } on SttException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error de voz: $e')),
+        );
       }
     } finally {
       if (mounted) setState(() => _listening = false);
@@ -58,40 +77,33 @@ class _PizarraScreenState extends ConsumerState<PizarraScreen> {
 
   Future<void> _pickPhoto(bool camera) async {
     final picker = ref.read(photoPickerProvider);
-    final bytes = camera
-        ? await picker.pickFromCamera()
-        : await picker.pickFromGallery();
-    if (bytes != null) {
-      ref.read(attachedImageProvider.notifier).set(bytes);
-    }
-  }
-
-  Future<void> _installModelFromDownloads() async {
-    final progress = ref.read(modelInstallProgressProvider.notifier);
-    progress.set(0);
     try {
-      await ref
-          .read(gemmaInstallerProvider)
-          .installFromDownloads(onProgress: progress.set);
-      ref.invalidate(teacherAiProvider);
-      ref.read(useGemmaProvider.notifier).set(true);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Modelo Gemma E2B instalado')),
-      );
+      final bytes = camera
+          ? await picker.pickFromCamera()
+          : await picker.pickFromGallery();
+      if (bytes != null) {
+        ref.read(attachedImageProvider.notifier).set(bytes);
+      }
     } catch (e) {
-      debugPrint('Khipu: install from Downloads failed: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'No hay .litertlm en Descargas. Copia el modelo y reintenta.',
+            camera
+                ? 'No pude usar la cámara'
+                : 'No pude abrir la galería',
           ),
         ),
       );
-    } finally {
-      progress.set(null);
     }
+  }
+
+  Future<void> _retryBootstrap() async {
+    ref.invalidate(gemmaBootstrapProvider);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Reintentando activar Gemma…')),
+    );
   }
 
   Future<void> _installModelFromNetwork() async {
@@ -101,6 +113,7 @@ class _PizarraScreenState extends ConsumerState<PizarraScreen> {
       await ref
           .read(gemmaInstallerProvider)
           .installFromNetwork(onProgress: progress.set);
+      ref.invalidate(gemmaBootstrapProvider);
       ref.invalidate(teacherAiProvider);
       ref.read(useGemmaProvider.notifier).set(true);
       if (!mounted) return;
@@ -113,7 +126,7 @@ class _PizarraScreenState extends ConsumerState<PizarraScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Descarga falló. Usa archivo local o revisa el token HF.',
+            'Descarga falló. Usa push_model.ps1 o revisa el token HF.',
           ),
         ),
       );
@@ -131,18 +144,18 @@ class _PizarraScreenState extends ConsumerState<PizarraScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: const Icon(Icons.download_done_outlined),
-                title: const Text('Instalar desde Descargas'),
-                subtitle: const Text('gemma-3n-E2B-it-int4.litertlm'),
+                leading: const Icon(Icons.refresh),
+                title: const Text('Reintentar auto-install'),
+                subtitle: const Text('Busca .litertlm en Documents de la app'),
                 onTap: () {
                   Navigator.pop(ctx);
-                  _installModelFromDownloads();
+                  _retryBootstrap();
                 },
               ),
               ListTile(
                 leading: const Icon(Icons.cloud_download_outlined),
-                title: const Text('Descargar una vez (Wi-Fi)'),
-                subtitle: const Text('Requiere acceso HF + token opcional'),
+                title: const Text('Descargar una vez (Wi‑Fi)'),
+                subtitle: const Text('Avanzado — token HF opcional'),
                 onTap: () {
                   Navigator.pop(ctx);
                   _installModelFromNetwork();
@@ -155,6 +168,21 @@ class _PizarraScreenState extends ConsumerState<PizarraScreen> {
     );
   }
 
+  String _subtitleFor(GemmaStatus? status, bool useGemma, bool modelActive) {
+    if (!useGemma) return 'Modo demo (Stub)';
+    if (modelActive || status is GemmaReady) {
+      return 'Gemma listo — prueba una pregunta';
+    }
+    return switch (status) {
+      GemmaNotInstalled() =>
+        'Falta el modelo en la app. En PC: .\\tools\\push_model.ps1',
+      GemmaFailed(:final reason) => 'Error Gemma: $reason',
+      GemmaInstalling(:final progress) => 'Activando… $progress%',
+      GemmaReady() => 'Gemma listo — prueba una pregunta',
+      null => 'Activando flutter_gemma…',
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final ui = ref.watch(lessonUiProvider);
@@ -163,8 +191,11 @@ class _PizarraScreenState extends ConsumerState<PizarraScreen> {
     final cursoContexto = ref.watch(pizarraContextProvider);
     final attached = ref.watch(attachedImageProvider);
     final installProgress = ref.watch(modelInstallProgressProvider);
-    final installer = ref.watch(gemmaInstallerProvider);
-    final gemmaReady = useGemma && installer.hasActiveModel;
+    final bootAsync = ref.watch(gemmaBootstrapProvider);
+    final bootStatus = bootAsync.asData?.value;
+    final modelActive = FlutterGemma.hasActiveModel();
+    final gemmaReady =
+        useGemma && (modelActive || bootStatus is GemmaReady);
     final busy =
         ui.phase == LessonPhase.thinking ||
         ui.phase == LessonPhase.playing ||
@@ -352,8 +383,7 @@ class _PizarraScreenState extends ConsumerState<PizarraScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Pregúntale a tu tutor por voz o texto. Te explica '
-                        'hablando y dibujando.',
+                        _subtitleFor(bootStatus, useGemma, modelActive),
                         style: KhipuTextStyles.body.copyWith(
                           fontSize: 13.5,
                           color: KhipuColors.textSecondary,
@@ -371,9 +401,11 @@ class _PizarraScreenState extends ConsumerState<PizarraScreen> {
                 ),
                 FilterChip(
                   label: Text(
-                    useGemma ? (gemmaReady ? 'Gemma' : 'Gemma…') : 'Stub',
+                    !useGemma
+                        ? 'Stub'
+                        : (gemmaReady ? 'Gemma' : 'Gemma…'),
                   ),
-                  selected: useGemma,
+                  selected: useGemma && gemmaReady,
                   onSelected: busy
                       ? null
                       : (v) {
@@ -427,8 +459,10 @@ class _SidePanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final useGemma = ref.watch(useGemmaProvider);
-    final installer = ref.watch(gemmaInstallerProvider);
-    final gemmaReady = useGemma && installer.hasActiveModel;
+    final bootAsync = ref.watch(gemmaBootstrapProvider);
+    final bootStatus = bootAsync.asData?.value;
+    final gemmaReady = useGemma &&
+        (FlutterGemma.hasActiveModel() || bootStatus is GemmaReady);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

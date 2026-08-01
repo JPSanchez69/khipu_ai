@@ -15,13 +15,14 @@ void main() {
     });
 
     test('acepta solo foto', () async {
-      final script = await ask('', imageJpeg: Uint8List.fromList([1, 2, 3]));
-      expect(script.actions, isNotEmpty);
+      final result = await ask('', imageJpeg: Uint8List.fromList([1, 2, 3]));
+      expect(result.script.actions, isNotEmpty);
+      expect(result.engine, TeacherEngineKind.stub);
     });
 
     test('acepta pregunta de texto', () async {
-      final script = await ask('¿Cómo resuelvo 2x + 3 = 11?');
-      expect(script.title, contains('2x'));
+      final result = await ask('¿Cómo resuelvo 2x + 3 = 11?');
+      expect(result.script.title, contains('2x'));
     });
   });
 

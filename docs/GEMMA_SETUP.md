@@ -1,75 +1,44 @@
-# Instalación del modelo Gemma 3n E2B (opcional)
+# Instalación del modelo Gemma 3n E2B — MVP demo
 
-El MVP funciona **sin modelo** (chip **Stub**): lecciones fixture + pizarra + TTS/STT.
+Objetivo: que **flutter_gemma** use el `.litertlm` en el teléfono para la demo.
 
-Modelo objetivo: **`gemma-3n-E2B-it-litert-lm`** → archivo  
-`gemma-3n-E2B-it-int4.litertlm` (multimodal texto+imagen).
+## Por qué no “Descargas”
 
-**No** se empaqueta en el APK (~3 GB). Instalación local o descarga una vez.
+En Android 13+ la app **no puede leer** archivos empujados por `adb` a Download/Android/data (dueño `shell` → Permission denied). Por eso el modelo debe vivir en **Documents de la app** (`app_flutter`).
 
-## Requisitos
+## Pasos (una vez por instalación de APK)
 
-1. Android **minSdk 26**, **arm64-v8a**. Ideal **≥6 GB RAM**. En **4 GB** es frecuente OOM → la app cae a fixtures sin crash.
-2. Runtime: `flutter_gemma` + **`flutter_gemma_litertlm`** (`.litertlm` / LiteRT-LM).
-3. Repo gated en Hugging Face: pide acceso a  
-   [google/gemma-3n-E2B-it-litert-lm](https://huggingface.co/google/gemma-3n-E2B-it-litert-lm).
+1. Instala la app (debug):
 
-## Opción A — Archivo en el teléfono (recomendado)
+```powershell
+cd app
+flutter build apk --debug
+adb install -r build\app\outputs\flutter-apk\app-debug.apk
+```
 
-1. Copia `gemma-3n-E2B-it-int4.litertlm` al teléfono (PC → adb o descarga).
-   Preferido (scoped storage, legible por la app):
+**No uses** `flutter install` (desinstala y borra `app_flutter`).
 
-   ```bash
-   adb push gemma-3n-E2B-it-int4.litertlm /sdcard/Android/data/pe.khipu.khipu_ai/files/
-   ```
+2. Empuja el modelo **dentro** de la app:
 
-   Alternativa: `/sdcard/Download/` (puede fallar por permisos en Android 11+).
-2. En la app: icono de modelo → **Instalar desde Descargas**.
-3. Activa el chip **Gemma**. Luego puedes usar modo avión.
+```powershell
+.\tools\push_model.ps1 -DeviceId <SERIAL> -ModelPath "C:\Users\jeanp\.litert-lm\models\gemma-3n-E2B-it\model.litertlm"
+```
 
-Equivalente en código:
+Eso hace: push → `/data/local/tmp` → `run-as pe.khipu.khipu_ai cp … app_flutter/gemma-3n-E2B-it-int4.litertlm`.
+
+3. Abre Khipu. Chip **Gemma** / “Gemma listo”. Primera pregunta puede tardar **1–2 min** (carga del motor en RAM).
+
+4. Smoke: `¿Cómo resuelvo 2x + 3 = 11?` → Motor: Gemma E2B (no Stub/fixtures).
+
+## Código
 
 ```dart
-await FlutterGemma.installModel(modelType: ModelType.gemmaIt)
-  .fromFile('/ruta/absoluta/gemma-3n-E2B-it-int4.litertlm')
-  .install();
+await FlutterGemma.installModel(
+  modelType: ModelType.gemmaIt,
+  fileType: ModelFileType.litertlm,
+).fromFile(documentsPath).install();
 ```
-
-## Opción B — Descarga Wi‑Fi (una vez)
-
-Token HF (repo gated):
-
-```bash
-flutter run --dart-define=HUGGINGFACE_TOKEN=hf_xxx
-```
-
-En la app: **Descargar una vez (Wi‑Fi)**, o:
-
-```dart
-await FlutterGemma.installModel(modelType: ModelType.gemmaIt)
-  .fromNetwork(
-    'https://huggingface.co/google/gemma-3n-E2B-it-litert-lm/resolve/main/gemma-3n-E2B-it-int4.litertlm',
-    token: 'hf_xxx',
-  )
-  .withProgress((p) => print('$p%'))
-  .install();
-```
-
-## Multimodal (foto)
-
-- Cámara o galería → resize lado máx. **640 px**, JPEG ~75%.
-- Una imagen por pregunta. Texto y/o STT siguen disponibles.
-- Si no hay modelo / OOM → fixtures.
 
 ## Fallback
 
-Si `FlutterGemma.hasActiveModel()` es false o `getActiveModel` / inferencia fallan, **Stub/fixtures** automáticamente. El chip puede decir **Gemma…** (no listo).
-
-## Gama baja / media-baja
-
-| Presupuesto | Comportamiento |
-|-------------|----------------|
-| Disco | ~3 GB para el `.litertlm` (fuera del APK) |
-| RAM pico | ~2.4–3 GB+ con visión; `largeHeap`; GPU→CPU |
-| Contexto | `maxTokens` 1024, `maxOutputTokens` 768 |
-| Kill | OOM → fixtures; no crashear la demo Stub |
+Si falla la carga (OOM, etc.), la UI muestra la razón y usa fixtures solo como degradación visible.

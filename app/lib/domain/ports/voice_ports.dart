@@ -4,6 +4,14 @@ abstract interface class TtsPort {
   Future<void> dispose();
 }
 
+class SttException implements Exception {
+  SttException(this.message);
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 abstract interface class SttPort {
   Future<bool> initialize();
   Future<String?> listenOnce({Duration timeout = const Duration(seconds: 8)});

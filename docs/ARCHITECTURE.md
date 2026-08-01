@@ -11,9 +11,11 @@
 | llama.cpp / GGUF | Control fino cuantización | FFI más pesado en Flutter | Alternativa si LiteRT falla |
 | Cloud FastAPI | Fácil | Rompe offline | **Fuera de producto** |
 
-**Kill criteria:** OOM o fallo de carga E2B → **Stub + fixtures** sin crash. Imágenes siempre redimensionadas (lado máx. 640). No empaquetar pesos en el APK.
+**Kill criteria:** OOM o fallo de carga E2B → **fixtures con razón visible en UI** (no degradación silenciosa). Imágenes siempre redimensionadas (lado máx. 640). No empaquetar pesos en el APK.
 
-**Runtime:** `flutter_gemma` + `flutter_gemma_litertlm` (`LiteRtLmEngine`). Backend: GPU con fallback CPU.
+**Runtime:** `flutter_gemma` + `flutter_gemma_litertlm` (`LiteRtLmEngine`).  
+**Install:** `ModelFileType.litertlm` + `FileSource` desde app-files en cada cold start (`ensureModelInstalled`).  
+**Backend:** texto GPU→CPU; con imagen **CPU primero** (Mali / OpenCL).
 
 ### App architecture
 
@@ -28,8 +30,8 @@ infrastructure (StubTeacher, GemmaTeacher, ImagePrep, Tts, Stt, fixtures)
 ```
 
 - **Clean Architecture** + **feature-first** bajo `lib/features/` y núcleo en `lib/core/`.
-- **Offline-first:** sin red para inferir; modelo instalable una vez (archivo o Wi‑Fi).
-- **Puerto `TeacherAiPort`:** stub ↔ Gemma; `TeachRequest` admite JPEG opcional.
+- **Offline-first:** sin red para inferir; modelo en app-files o Wi‑Fi opcional.
+- **Puerto `TeacherAiPort`:** `LessonResult` con `engine` + `degradedReason`; `TeachRequest` admite JPEG.
 
 ### LessonScript DSL v0.1
 
@@ -53,10 +55,10 @@ Flutter interpreta y anima; el modelo emite JSON (reparación tolerante).
 
 ### Memoria y rendimiento
 
-- Contexto corto (`maxTokens` 1024).
+- Contexto: `maxTokens` 2048 (4096 con imagen).
 - Una imagen por turno; cerrar chat tras inferir.
 - Canvas: elementos inmutables + `CustomPainter`.
-- Android `largeHeap=true`; OpenCL opcional.
+- Android `largeHeap=true`; `libOpenCL` + `libvndksupport` opcionales.
 
 ### minSdk
 

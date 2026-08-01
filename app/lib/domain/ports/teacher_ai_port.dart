@@ -17,6 +17,21 @@ class TeachRequest {
   bool get hasImage => imageJpeg != null && imageJpeg!.isNotEmpty;
 }
 
+/// Resultado de teach: script + motor efectivo (+ razón si degradó).
+class LessonResult {
+  const LessonResult({
+    required this.script,
+    required this.engine,
+    this.degradedReason,
+  });
+
+  final LessonScript script;
+  final TeacherEngineKind engine;
+  final String? degradedReason;
+
+  bool get isDegraded => degradedReason != null;
+}
+
 /// Puerto de IA profesor — stub o Gemma on-device.
 abstract interface class TeacherAiPort {
   TeacherEngineKind get kind;
@@ -24,5 +39,5 @@ abstract interface class TeacherAiPort {
   Future<bool> isReady();
 
   /// Genera un LessonScript a partir de la pregunta (± foto).
-  Future<LessonScript> teach(TeachRequest request);
+  Future<LessonResult> teach(TeachRequest request);
 }

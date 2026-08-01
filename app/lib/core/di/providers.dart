@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application/ask_question.dart';
@@ -9,34 +10,55 @@ import '../../domain/ports/photo_picker_port.dart';
 import '../../domain/ports/teacher_ai_port.dart';
 import '../../domain/ports/voice_ports.dart';
 import '../../infrastructure/ai/gemma_model_installer.dart';
+import '../../infrastructure/ai/gemma_status.dart';
 import '../../infrastructure/ai/gemma_teacher_ai.dart';
 import '../../infrastructure/ai/stub_teacher_ai.dart';
 import '../../infrastructure/media/image_picker_photo_service.dart';
 import '../../infrastructure/voice/flutter_tts_service.dart';
 import '../../infrastructure/voice/speech_to_text_service.dart';
 
-/// `true` = intentar Gemma; si no hay modelo, el adapter cae a fixtures.
+/// Preferencia del usuario: intentar Gemma (default true).
 final useGemmaProvider =
     NotifierProvider<UseGemmaNotifier, bool>(UseGemmaNotifier.new);
 
 class UseGemmaNotifier extends Notifier<bool> {
   @override
-  bool build() => false;
+  bool build() => true;
 
   void set(bool value) => state = value;
 }
 
 final gemmaInstallerProvider = Provider<GemmaModelInstaller>((ref) {
-  return const GemmaModelInstaller();
+  return GemmaModelInstaller();
+});
+
+/// Bootstrap: copia/registro + verificación real del motor LiteRT.
+final gemmaBootstrapProvider = FutureProvider<GemmaStatus>((ref) async {
+  final installer = ref.watch(gemmaInstallerProvider);
+  final progress = ref.read(modelInstallProgressProvider.notifier);
+  try {
+    final status = await installer.ensureModelInstalled(
+      onProgress: progress.set,
+    );
+    GemmaBootstrapCache.last = status;
+    return status;
+  } finally {
+    progress.set(null);
+  }
 });
 
 final teacherAiProvider = Provider<TeacherAiPort>((ref) {
   final useGemma = ref.watch(useGemmaProvider);
-  if (useGemma) {
+  // Dispara bootstrap (registro litertlm) sin bloquear la elección del puerto.
+  ref.watch(gemmaBootstrapProvider);
+
+  // MVP: si flutter_gemma ya tiene modelo activo, usar Gemma de inmediato.
+  if (useGemma && FlutterGemma.hasActiveModel()) {
     final gemma = GemmaTeacherAi();
     ref.onDispose(gemma.dispose);
     return gemma;
   }
+
   return StubTeacherAi();
 });
 
@@ -152,32 +174,46 @@ class LessonUiNotifier extends Notifier<LessonUiState> {
     final player = ref.read(lessonPlayerProvider);
     final board = ref.read(boardStateProvider.notifier);
     final image = ref.read(attachedImageProvider);
+    final boot = ref.read(gemmaBootstrapProvider);
     final useGemma = ref.read(useGemmaProvider);
-    final teacher = ref.read(teacherAiProvider);
 
-    final ready = useGemma ? await teacher.isReady() : true;
-    final hint = !useGemma
-        ? 'Stub'
-        : (ready ? 'Gemma E2B' : 'Gemma (sin modelo → fixtures)');
+    final bootHint = boot.maybeWhen(
+      data: (s) => switch (s) {
+        GemmaReady() => 'Gemma E2B',
+        GemmaNotInstalled() => 'Sin modelo (demo)',
+        GemmaFailed(:final reason) => 'Gemma falló: $reason',
+        GemmaInstalling(:final progress) => 'Instalando… $progress%',
+      },
+      loading: () => 'Preparando Gemma…',
+      orElse: () => 'Preparando…',
+    );
 
     state = state.copyWith(
       phase: LessonPhase.thinking,
       statusMessage: 'Pensando cómo enseñártelo…',
-      engineHint: hint,
+      engineHint: useGemma ? bootHint : 'Stub',
       clearError: true,
     );
     board.clear();
 
     try {
-      final script = await ask(question, imageJpeg: image);
+      final result = await ask(question, imageJpeg: image);
       ref.read(attachedImageProvider.notifier).clear();
+
+      final engineLabel = result.engine == TeacherEngineKind.gemma
+          ? 'Gemma E2B'
+          : 'Demo (Stub)';
+      final degraded = result.degradedReason;
+
       state = state.copyWith(
         phase: LessonPhase.playing,
-        lessonTitle: script.title,
-        statusMessage: script.title,
+        lessonTitle: result.script.title,
+        statusMessage: result.script.title,
+        engineHint: degraded != null ? '$engineLabel — $degraded' : engineLabel,
+        errorMessage: degraded,
       );
       await player.play(
-        script,
+        result.script,
         onBoard: board.replace,
         onStatus: (msg) {
           state = state.copyWith(statusMessage: msg);

@@ -30,14 +30,57 @@ class LessonScriptParser {
     return fromMap(decoded);
   }
 
-  /// Best-effort repair: extract first `{...}` block from model output.
+  /// Best-effort repair: fences, trailing commas, prose around JSON.
   LessonScript parseLenient(String raw) {
     try {
       return parse(raw);
     } on LessonScriptParseException {
-      final repaired = _extractJson(raw);
-      return parse(repaired);
+      // continue to repairs
     }
+
+    var candidate = _stripFences(raw);
+    candidate = _extractJson(candidate);
+    candidate = _stripTrailingCommas(candidate);
+
+    try {
+      return parse(candidate);
+    } on LessonScriptParseException {
+      // Balanced-brace extract as last resort.
+      final balanced = _balancedObject(raw);
+      if (balanced != null) {
+        return parse(_stripTrailingCommas(balanced));
+      }
+      rethrow;
+    }
+  }
+
+  String _stripFences(String raw) {
+    final fence = RegExp(r'```(?:json)?\s*([\s\S]*?)```', multiLine: true);
+    final match = fence.firstMatch(raw.trim());
+    if (match != null) return match.group(1)!.trim();
+    return raw.trim();
+  }
+
+  String _stripTrailingCommas(String json) {
+    return json.replaceAllMapped(
+      RegExp(r',\s*([}\]])'),
+      (m) => m.group(1)!,
+    );
+  }
+
+  String? _balancedObject(String raw) {
+    final start = raw.indexOf('{');
+    if (start < 0) return null;
+    var depth = 0;
+    for (var i = start; i < raw.length; i++) {
+      final ch = raw[i];
+      if (ch == '{') depth++;
+      if (ch == '}') {
+        depth--;
+        if (depth == 0) return raw.substring(start, i + 1);
+      }
+    }
+    return null;
   }
 
   LessonScript fromMap(Map<String, dynamic> map) {

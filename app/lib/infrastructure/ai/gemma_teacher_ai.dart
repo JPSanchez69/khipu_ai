@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
 
-import '../../domain/lesson_script/lesson_action.dart';
 import '../../domain/lesson_script/lesson_script_parser.dart';
 import '../../domain/ports/teacher_ai_port.dart';
 import 'gemma_model_config.dart';
@@ -9,20 +8,18 @@ import 'lesson_fixtures.dart';
 import 'teacher_prompts.dart';
 
 /// Adapter Gemma 3n E2B (LiteRT-LM) vía flutter_gemma.
-/// Si el modelo no está instalado o falla (OOM), cae a fixtures.
+/// Fallback a fixtures solo con [LessonResult.degradedReason] visible.
 class GemmaTeacherAi implements TeacherAiPort {
   GemmaTeacherAi({
     this._parser = const LessonScriptParser(),
-    this.maxTokens = GemmaModelConfig.maxTokens,
   });
 
   final LessonScriptParser _parser;
-  final int maxTokens;
 
   InferenceModel? _model;
-  var _initAttempted = false;
   var _ready = false;
   var _vision = false;
+  String? _lastInitError;
 
   @override
   TeacherEngineKind get kind => TeacherEngineKind.gemma;
@@ -35,20 +32,19 @@ class GemmaTeacherAi implements TeacherAiPort {
 
   /// Permite reintentar tras instalar el modelo en caliente.
   void invalidate() {
-    _initAttempted = false;
     _ready = false;
     _vision = false;
+    _lastInitError = null;
     _model = null;
   }
 
   Future<void> _ensureModel({required bool needVision}) async {
-    if (_initAttempted && _ready && (!needVision || _vision)) return;
-    if (_initAttempted && !_ready) return;
+    if (_ready && (!needVision || _vision)) return;
 
-    _initAttempted = true;
     if (!FlutterGemma.hasActiveModel()) {
       _ready = false;
-      debugPrint('Khipu: sin modelo activo (instala gemma-3n-E2B-it-litert-lm).');
+      _lastInitError = 'Sin modelo activo';
+      debugPrint('Khipu: sin modelo activo (auto-install falló o ausente).');
       return;
     }
 
@@ -57,20 +53,29 @@ class GemmaTeacherAi implements TeacherAiPort {
     } catch (_) {}
     _model = null;
 
-    // Multimodal + gama media: GPU primero; CPU si falla (OOM / sin OpenCL).
-    for (final backend in [PreferredBackend.gpu, PreferredBackend.cpu]) {
+    final tokens = needVision
+        ? GemmaModelConfig.maxTokensWithImage
+        : GemmaModelConfig.maxTokens;
+
+    // MVP demo: CPU primero (estable en A54). GPU como respaldo.
+    final backends = [PreferredBackend.cpu, PreferredBackend.gpu];
+
+    for (final backend in backends) {
       try {
         _model = await FlutterGemma.getActiveModel(
-          maxTokens: maxTokens,
+          maxTokens: tokens,
           preferredBackend: backend,
-          supportImage: true,
-          maxNumImages: GemmaModelConfig.maxNumImages,
+          // Visión solo si hay foto (carga más liviana en demo texto).
+          supportImage: needVision,
+          maxNumImages: needVision ? GemmaModelConfig.maxNumImages : 1,
         );
         _ready = true;
-        _vision = true;
-        debugPrint('Khipu: Gemma E2B listo ($backend, vision=true)');
+        _vision = needVision;
+        _lastInitError = null;
+        debugPrint('Khipu: Gemma E2B listo ($backend, vision=$needVision)');
         return;
       } catch (e, st) {
+        _lastInitError = '$e';
         debugPrint('Khipu: getActiveModel($backend) falló: $e');
         debugPrint('$st');
       }
@@ -78,15 +83,26 @@ class GemmaTeacherAi implements TeacherAiPort {
 
     _ready = false;
     _vision = false;
-    debugPrint('Khipu: Gemma no disponible. Usando fixtures.');
+    debugPrint('Khipu: Gemma no disponible. Usando fixtures con razón.');
+  }
+
+  LessonResult _fixture(TeachRequest request, String reason) {
+    return LessonResult(
+      script: LessonFixtures.resolve(_fixtureKey(request)),
+      engine: TeacherEngineKind.stub,
+      degradedReason: reason,
+    );
   }
 
   @override
-  Future<LessonScript> teach(TeachRequest request) async {
+  Future<LessonResult> teach(TeachRequest request) async {
     final needVision = request.hasImage;
     await _ensureModel(needVision: needVision);
     if (!_ready || _model == null) {
-      return LessonFixtures.resolve(_fixtureKey(request));
+      return _fixture(
+        request,
+        _lastInitError ?? 'Gemma no listo',
+      );
     }
 
     InferenceChat? chat;
@@ -119,18 +135,22 @@ class GemmaTeacherAi implements TeacherAiPort {
         _ => response.toString(),
       };
       if (text.trim().isEmpty) {
-        return LessonFixtures.resolve(_fixtureKey(request));
+        return _fixture(request, 'Respuesta vacía de Gemma');
       }
       try {
-        return _parser.parseLenient(text);
-      } catch (_) {
-        return LessonFixtures.resolve(_fixtureKey(request));
+        final script = _parser.parseLenient(text);
+        return LessonResult(
+          script: script,
+          engine: TeacherEngineKind.gemma,
+        );
+      } catch (e) {
+        return _fixture(request, 'JSON LessonScript inválido: $e');
       }
     } catch (e) {
       debugPrint('Khipu: inferencia Gemma falló: $e');
-      // OOM u otro fallo → fixtures, sin crash.
+      // OOM u otro fallo → permitir reintento en la próxima pregunta.
       _ready = false;
-      return LessonFixtures.resolve(_fixtureKey(request));
+      return _fixture(request, 'Inferencia falló (posible OOM): $e');
     } finally {
       await chat?.close();
     }

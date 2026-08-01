@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 
-import '../domain/lesson_script/lesson_action.dart';
 import '../domain/ports/teacher_ai_port.dart';
 
 class AskQuestion {
@@ -8,7 +7,7 @@ class AskQuestion {
 
   final TeacherAiPort _teacher;
 
-  Future<LessonScript> call(
+  Future<LessonResult> call(
     String question, {
     Uint8List? imageJpeg,
   }) {

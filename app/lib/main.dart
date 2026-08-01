@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:flutter_gemma_litertlm/flutter_gemma_litertlm.dart';
@@ -11,15 +12,13 @@ import 'features/shell/app_shell.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // LiteRT-LM para gemma-3n-E2B-it-*.litertlm (visión on-device).
-  // Sin modelo instalado, GemmaTeacherAi cae a fixtures automáticamente.
-  try {
-    FlutterGemma.initialize(
-      inferenceEngines: [LiteRtLmEngine()],
-    );
-  } catch (e) {
-    debugPrint('Khipu: FlutterGemma.initialize omitido: $e');
+  if (kDebugMode) {
+    FlutterGemma.logLevel = GemmaLogLevel.verbose;
   }
+  // Init plugin; el registro del .litertlm lo hace gemmaBootstrapProvider.
+  await FlutterGemma.initialize(
+    inferenceEngines: [LiteRtLmEngine()],
+  );
 
   runApp(const ProviderScope(child: KhipuApp()));
 }

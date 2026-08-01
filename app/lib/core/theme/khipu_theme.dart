@@ -22,7 +22,7 @@ class KhipuTheme {
   KhipuTheme._();
 
   // --- Alias legacy para compatibilidad con pantallas aun no migradas
-  // a los tokens Khipu (WhiteboardCanvas, HomeScreen). No usar en
+  // a los tokens Khipu (WhiteboardCanvas, PizarraScreen). No usar en
   // codigo nuevo: preferir KhipuColors.* ---
   @Deprecated('Usar KhipuColors.brandIndigo o textPrimary')
   static const forest = Color(0xFF1B4332);
