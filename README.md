@@ -24,6 +24,40 @@ flutter run                    # Android (requiere SDK + minSdk 26)
 
 Por defecto usa **StubTeacher** (fixtures). Instala `gemma-3n-E2B-it-int4.litertlm` desde la UI y activa el chip **Gemma**.
 
+### Chrome en Windows
+
+Si el repositorio está dentro de una ruta con espacios, como
+`Proyectos Desarrollo UNI`, el proceso de `flutter run -d chrome` puede quedar
+bloqueado en:
+
+```text
+Launching lib\main.dart on Chrome in debug mode...
+```
+
+En ese caso, no ejecutes `flutter run -d chrome` directamente. Usa el lanzador
+incluido, que crea una unidad virtual temporal sin espacios.
+
+Desde la raíz del repositorio:
+
+```powershell
+.\run_web.cmd
+```
+
+Desde la carpeta `app`:
+
+```powershell
+..\run_web.cmd
+```
+
+El lanzador ejecuta `flutter pub get`, inicia la aplicación en Chrome y elimina
+la unidad temporal al terminar. La primera compilación puede tardar alrededor
+de un minuto. Para detener Flutter, presiona `Ctrl+C`; si Windows pregunta
+`¿Desea terminar el trabajo por lotes (S/N)?`, responde `N` para permitir que
+el lanzador complete la limpieza.
+
+La demo web inicia con **StubTeacher**. El modelo Gemma LiteRT-LM completo está
+orientado a Android.
+
 ## Qué incluye el MVP
 
 | Prioridad | Entrega |
