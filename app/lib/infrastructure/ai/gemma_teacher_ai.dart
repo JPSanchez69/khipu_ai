@@ -112,9 +112,12 @@ class GemmaTeacherAi implements TeacherAiPort {
         supportImage: false,
         systemInstruction: TeacherPrompts.system,
       );
+      if (chat == null) {
+        _fail('Gemma no pudo crear la sesión de chat.');
+      }
 
       final first = await _generateOnce(
-        chat!,
+        chat,
         TeacherPrompts.userQuestion(request.question),
       );
       try {

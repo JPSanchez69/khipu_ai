@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:khipu_ai/domain/lesson_script/lesson_script_parser.dart';
 import 'package:khipu_ai/infrastructure/ai/gemma_teacher_ai.dart';
 import 'package:khipu_ai/infrastructure/ai/teacher_prompts.dart';
 
@@ -28,7 +29,7 @@ void main() {
 {"type":"speakCue","id":"s1","text":"Solo chat"}
 ]}
 '''),
-      throwsA(anything),
+      throwsA(isA<LessonScriptParseException>()),
     );
   });
 }
