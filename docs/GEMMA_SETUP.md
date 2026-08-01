@@ -1,6 +1,6 @@
 # Instalación del modelo Gemma 3n E2B — MVP demo
 
-Objetivo: que **flutter_gemma** use el `.litertlm` en el teléfono para la demo.
+Objetivo: que **flutter_gemma** use el `.litertlm` en el teléfono. La demo es **solo Gemma** (sin Stub/fixtures).
 
 ## Por qué no “Descargas”
 
@@ -8,7 +8,16 @@ En Android 13+ la app **no puede leer** archivos empujados por `adb` a Download/
 
 ## Pasos (una vez por instalación de APK)
 
-1. Instala la app (debug):
+### Opción A — desarrollo
+
+```powershell
+cd app
+flutter run -d RFCW50YXPZD --debug
+```
+
+Luego, si el modelo no está en `app_flutter`, empújalo (paso 2 abajo).
+
+### Opción B — APK sin borrar datos
 
 ```powershell
 cd app
@@ -18,17 +27,27 @@ adb install -r build\app\outputs\flutter-apk\app-debug.apk
 
 **No uses** `flutter install` (desinstala y borra `app_flutter`).
 
-2. Empuja el modelo **dentro** de la app:
+### Empujar el modelo
 
 ```powershell
-.\tools\push_model.ps1 -DeviceId <SERIAL> -ModelPath "C:\Users\jeanp\.litert-lm\models\gemma-3n-E2B-it\model.litertlm"
+.\tools\push_model.ps1 -DeviceId RFCW50YXPZD -ModelPath "C:\Users\jeanp\.litert-lm\models\gemma-3n-E2B-it\model.litertlm"
 ```
 
 Eso hace: push → `/data/local/tmp` → `run-as pe.khipu.khipu_ai cp … app_flutter/gemma-3n-E2B-it-int4.litertlm`.
 
-3. Abre Khipu. Chip **Gemma** / “Gemma listo”. Primera pregunta puede tardar **1–2 min** (carga del motor en RAM).
+## Uso
 
-4. Smoke: `¿Cómo resuelvo 2x + 3 = 11?` → Motor: Gemma E2B (no Stub/fixtures).
+1. Abre Khipu. Chip **Gemma** / subtítulo “Gemma listo”.
+2. Primera pregunta puede tardar **1–2 min** (carga del motor en RAM).
+3. Smoke: `¿Cómo resuelvo 2x + 3 = 11?` → **Motor: Gemma E2B** y dibujo en pizarra.
+
+## Fallo explícito (sin fixtures)
+
+Si no hay modelo, OOM o el JSON de LessonScript es inválido:
+
+- La UI muestra un error claro (“Gemma no está listo…” / memoria / lección inválida).
+- La pizarra **no** se llena con respuestas de ejemplo.
+- Reintenta tras `push_model.ps1`, cerrar apps (RAM) o otra pregunta.
 
 ## Código
 
@@ -38,7 +57,3 @@ await FlutterGemma.installModel(
   fileType: ModelFileType.litertlm,
 ).fromFile(documentsPath).install();
 ```
-
-## Fallback
-
-Si falla la carga (OOM, etc.), la UI muestra la razón y usa fixtures solo como degradación visible.

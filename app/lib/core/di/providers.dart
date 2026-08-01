@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 
-import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application/ask_question.dart';
@@ -12,27 +11,15 @@ import '../../domain/ports/voice_ports.dart';
 import '../../infrastructure/ai/gemma_model_installer.dart';
 import '../../infrastructure/ai/gemma_status.dart';
 import '../../infrastructure/ai/gemma_teacher_ai.dart';
-import '../../infrastructure/ai/stub_teacher_ai.dart';
 import '../../infrastructure/media/image_picker_photo_service.dart';
 import '../../infrastructure/voice/flutter_tts_service.dart';
 import '../../infrastructure/voice/speech_to_text_service.dart';
-
-/// Preferencia del usuario: intentar Gemma (default true).
-final useGemmaProvider =
-    NotifierProvider<UseGemmaNotifier, bool>(UseGemmaNotifier.new);
-
-class UseGemmaNotifier extends Notifier<bool> {
-  @override
-  bool build() => true;
-
-  void set(bool value) => state = value;
-}
 
 final gemmaInstallerProvider = Provider<GemmaModelInstaller>((ref) {
   return GemmaModelInstaller();
 });
 
-/// Bootstrap: copia/registro + verificación real del motor LiteRT.
+/// Bootstrap: registro del .litertlm + estado del motor LiteRT.
 final gemmaBootstrapProvider = FutureProvider<GemmaStatus>((ref) async {
   final installer = ref.watch(gemmaInstallerProvider);
   final progress = ref.read(modelInstallProgressProvider.notifier);
@@ -47,19 +34,12 @@ final gemmaBootstrapProvider = FutureProvider<GemmaStatus>((ref) async {
   }
 });
 
+/// Producto: siempre Gemma. Stub solo en tests vía inyección manual.
 final teacherAiProvider = Provider<TeacherAiPort>((ref) {
-  final useGemma = ref.watch(useGemmaProvider);
-  // Dispara bootstrap (registro litertlm) sin bloquear la elección del puerto.
   ref.watch(gemmaBootstrapProvider);
-
-  // MVP: si flutter_gemma ya tiene modelo activo, usar Gemma de inmediato.
-  if (useGemma && FlutterGemma.hasActiveModel()) {
-    final gemma = GemmaTeacherAi();
-    ref.onDispose(gemma.dispose);
-    return gemma;
-  }
-
-  return StubTeacherAi();
+  final gemma = GemmaTeacherAi();
+  ref.onDispose(gemma.dispose);
+  return gemma;
 });
 
 final photoPickerProvider = Provider<PhotoPickerPort>((ref) {
@@ -175,23 +155,22 @@ class LessonUiNotifier extends Notifier<LessonUiState> {
     final board = ref.read(boardStateProvider.notifier);
     final image = ref.read(attachedImageProvider);
     final boot = ref.read(gemmaBootstrapProvider);
-    final useGemma = ref.read(useGemmaProvider);
 
     final bootHint = boot.maybeWhen(
       data: (s) => switch (s) {
         GemmaReady() => 'Gemma E2B',
-        GemmaNotInstalled() => 'Sin modelo (demo)',
+        GemmaNotInstalled() => 'Gemma no listo (sin modelo)',
         GemmaFailed(:final reason) => 'Gemma falló: $reason',
         GemmaInstalling(:final progress) => 'Instalando… $progress%',
       },
       loading: () => 'Preparando Gemma…',
-      orElse: () => 'Preparando…',
+      orElse: () => 'Preparando Gemma…',
     );
 
     state = state.copyWith(
       phase: LessonPhase.thinking,
       statusMessage: 'Pensando cómo enseñártelo…',
-      engineHint: useGemma ? bootHint : 'Stub',
+      engineHint: bootHint,
       clearError: true,
     );
     board.clear();
@@ -200,17 +179,18 @@ class LessonUiNotifier extends Notifier<LessonUiState> {
       final result = await ask(question, imageJpeg: image);
       ref.read(attachedImageProvider.notifier).clear();
 
-      final engineLabel = result.engine == TeacherEngineKind.gemma
-          ? 'Gemma E2B'
-          : 'Demo (Stub)';
-      final degraded = result.degradedReason;
+      if (result.engine != TeacherEngineKind.gemma) {
+        throw const TeacherAiException(
+          'Motor inesperado: se esperaba Gemma.',
+        );
+      }
 
       state = state.copyWith(
         phase: LessonPhase.playing,
         lessonTitle: result.script.title,
         statusMessage: result.script.title,
-        engineHint: degraded != null ? '$engineLabel — $degraded' : engineLabel,
-        errorMessage: degraded,
+        engineHint: 'Gemma E2B',
+        clearError: true,
       );
       await player.play(
         result.script,
@@ -222,6 +202,15 @@ class LessonUiNotifier extends Notifier<LessonUiState> {
       state = state.copyWith(
         phase: LessonPhase.idle,
         statusMessage: '¿Otra pregunta?',
+        engineHint: 'Gemma E2B',
+      );
+    } on TeacherAiException catch (e) {
+      ref.read(attachedImageProvider.notifier).clear();
+      state = state.copyWith(
+        phase: LessonPhase.error,
+        errorMessage: e.message,
+        statusMessage: 'Gemma no pudo enseñar',
+        engineHint: 'Gemma',
       );
     } catch (e) {
       ref.read(attachedImageProvider.notifier).clear();
@@ -229,6 +218,7 @@ class LessonUiNotifier extends Notifier<LessonUiState> {
         phase: LessonPhase.error,
         errorMessage: 'No pude armar la lección. Intenta de nuevo.',
         statusMessage: 'Hubo un problema',
+        engineHint: 'Gemma',
       );
     }
   }

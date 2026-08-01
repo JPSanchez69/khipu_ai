@@ -23,7 +23,7 @@ flutter run -d chrome          # demo UI sin Android SDK
 flutter run                    # Android (requiere SDK + minSdk 26)
 ```
 
-Por defecto usa **StubTeacher** (fixtures). Instala `gemma-3n-E2B-it-int4.litertlm` desde la UI y activa el chip **Gemma**.
+Por defecto usa **Gemma** on-device. Sin modelo instalado la UI muestra error (no Stub). Instala `gemma-3n-E2B-it-int4.litertlm` con `tools/push_model.ps1` (ver [Gemma setup](docs/GEMMA_SETUP.md)).
 
 ## Qué incluye el MVP
 

@@ -9,7 +9,6 @@ import '../../core/theme/khipu_text_styles.dart';
 import '../../core/theme/khipu_theme.dart';
 import '../../domain/ports/voice_ports.dart';
 import '../../infrastructure/ai/gemma_status.dart';
-import '../../infrastructure/ai/gemma_teacher_ai.dart';
 import 'whiteboard/whiteboard_canvas.dart';
 
 /// Tab "Pizarra IA": el tutor. Input de texto + micrófono, la IA piensa
@@ -115,7 +114,6 @@ class _PizarraScreenState extends ConsumerState<PizarraScreen> {
           .installFromNetwork(onProgress: progress.set);
       ref.invalidate(gemmaBootstrapProvider);
       ref.invalidate(teacherAiProvider);
-      ref.read(useGemmaProvider.notifier).set(true);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Modelo descargado e instalado')),
@@ -168,8 +166,7 @@ class _PizarraScreenState extends ConsumerState<PizarraScreen> {
     );
   }
 
-  String _subtitleFor(GemmaStatus? status, bool useGemma, bool modelActive) {
-    if (!useGemma) return 'Modo demo (Stub)';
+  String _subtitleFor(GemmaStatus? status, bool modelActive) {
     if (modelActive || status is GemmaReady) {
       return 'Gemma listo — prueba una pregunta';
     }
@@ -183,19 +180,24 @@ class _PizarraScreenState extends ConsumerState<PizarraScreen> {
     };
   }
 
+  String _chipLabel(GemmaStatus? status, bool modelActive) {
+    if (modelActive || status is GemmaReady) return 'Gemma';
+    if (status is GemmaFailed) return 'Error Gemma';
+    if (status is GemmaInstalling) return 'Gemma…';
+    return 'Gemma no listo';
+  }
+
   @override
   Widget build(BuildContext context) {
     final ui = ref.watch(lessonUiProvider);
     final board = ref.watch(boardStateProvider);
-    final useGemma = ref.watch(useGemmaProvider);
     final cursoContexto = ref.watch(pizarraContextProvider);
     final attached = ref.watch(attachedImageProvider);
     final installProgress = ref.watch(modelInstallProgressProvider);
     final bootAsync = ref.watch(gemmaBootstrapProvider);
     final bootStatus = bootAsync.asData?.value;
     final modelActive = FlutterGemma.hasActiveModel();
-    final gemmaReady =
-        useGemma && (modelActive || bootStatus is GemmaReady);
+    final gemmaReady = modelActive || bootStatus is GemmaReady;
     final busy =
         ui.phase == LessonPhase.thinking ||
         ui.phase == LessonPhase.playing ||
@@ -383,7 +385,7 @@ class _PizarraScreenState extends ConsumerState<PizarraScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        _subtitleFor(bootStatus, useGemma, modelActive),
+                        _subtitleFor(bootStatus, modelActive),
                         style: KhipuTextStyles.body.copyWith(
                           fontSize: 13.5,
                           color: KhipuColors.textSecondary,
@@ -400,19 +402,9 @@ class _PizarraScreenState extends ConsumerState<PizarraScreen> {
                   color: KhipuColors.textSecondary,
                 ),
                 FilterChip(
-                  label: Text(
-                    !useGemma
-                        ? 'Stub'
-                        : (gemmaReady ? 'Gemma' : 'Gemma…'),
-                  ),
-                  selected: useGemma && gemmaReady,
-                  onSelected: busy
-                      ? null
-                      : (v) {
-                          ref.read(useGemmaProvider.notifier).set(v);
-                          final t = ref.read(teacherAiProvider);
-                          if (t is GemmaTeacherAi) t.invalidate();
-                        },
+                  label: Text(_chipLabel(bootStatus, modelActive)),
+                  selected: gemmaReady,
+                  onSelected: null,
                 ),
               ],
             ),
@@ -458,11 +450,10 @@ class _SidePanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final useGemma = ref.watch(useGemmaProvider);
     final bootAsync = ref.watch(gemmaBootstrapProvider);
     final bootStatus = bootAsync.asData?.value;
-    final gemmaReady = useGemma &&
-        (FlutterGemma.hasActiveModel() || bootStatus is GemmaReady);
+    final gemmaReady =
+        FlutterGemma.hasActiveModel() || bootStatus is GemmaReady;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -530,13 +521,11 @@ class _SidePanel extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const _ModelStatusLine('📦 Gemma-3n E2B-it · int4 (.litertlm)'),
-              const _ModelStatusLine('⚡ Motor LiteRT-LM (flutter_gemma)'),
-              const _ModelStatusLine('📴 Sin conexión requerida'),
+              const _ModelStatusLine('Gemma-3n E2B-it · int4 (.litertlm)'),
+              const _ModelStatusLine('Motor LiteRT-LM (flutter_gemma)'),
+              const _ModelStatusLine('Inferencia offline (sin cloud)'),
               _ModelStatusLine(
-                useGemma
-                    ? (gemmaReady ? '✅ Modelo activo' : '⬇️ Falta instalar')
-                    : '🧪 Usando respuestas de ejemplo (Stub)',
+                gemmaReady ? 'Modelo activo' : 'Falta instalar el modelo',
               ),
             ],
           ),

@@ -32,12 +32,28 @@ class LessonResult {
   bool get isDegraded => degradedReason != null;
 }
 
-/// Puerto de IA profesor — stub o Gemma on-device.
+/// Error de motor profesor (sin modelo, OOM, JSON inválido, etc.).
+/// La UI debe mostrar [message] y no pintar una lección fixture.
+class TeacherAiException implements Exception {
+  const TeacherAiException(this.message, {this.cause});
+
+  /// Mensaje seguro para mostrar al estudiante.
+  final String message;
+
+  /// Detalle técnico opcional (logs).
+  final Object? cause;
+
+  @override
+  String toString() => 'TeacherAiException: $message';
+}
+
+/// Puerto de IA profesor — Gemma on-device en producto; stub solo en tests.
 abstract interface class TeacherAiPort {
   TeacherEngineKind get kind;
 
   Future<bool> isReady();
 
   /// Genera un LessonScript a partir de la pregunta (± foto).
+  /// Lanza [TeacherAiException] si el motor no puede enseñar.
   Future<LessonResult> teach(TeachRequest request);
 }

@@ -34,7 +34,7 @@ class _CaptureTeacher implements TeacherAiPort {
 
 void main() {
   group('AskQuestion + LessonResult', () {
-    test('Stub degrada con reason', () async {
+    test('StubTeacherAi (doble unitario) marca engine stub', () async {
       final result = await AskQuestion(StubTeacherAi()).call('hola');
       expect(result.engine, TeacherEngineKind.stub);
       expect(result.degradedReason, isNotNull);

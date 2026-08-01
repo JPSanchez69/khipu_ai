@@ -4,11 +4,10 @@ import 'package:flutter_gemma/flutter_gemma.dart';
 import '../../domain/lesson_script/lesson_script_parser.dart';
 import '../../domain/ports/teacher_ai_port.dart';
 import 'gemma_model_config.dart';
-import 'lesson_fixtures.dart';
 import 'teacher_prompts.dart';
 
 /// Adapter Gemma 3n E2B (LiteRT-LM) vía flutter_gemma.
-/// Fallback a fixtures solo con [LessonResult.degradedReason] visible.
+/// Sin fixtures: fallos → [TeacherAiException] (UI de error, pizarra vacía).
 class GemmaTeacherAi implements TeacherAiPort {
   GemmaTeacherAi({
     this._parser = const LessonScriptParser(),
@@ -83,15 +82,11 @@ class GemmaTeacherAi implements TeacherAiPort {
 
     _ready = false;
     _vision = false;
-    debugPrint('Khipu: Gemma no disponible. Usando fixtures con razón.');
+    debugPrint('Khipu: Gemma no disponible.');
   }
 
-  LessonResult _fixture(TeachRequest request, String reason) {
-    return LessonResult(
-      script: LessonFixtures.resolve(_fixtureKey(request)),
-      engine: TeacherEngineKind.stub,
-      degradedReason: reason,
-    );
+  Never _fail(String message, {Object? cause}) {
+    throw TeacherAiException(message, cause: cause);
   }
 
   @override
@@ -99,9 +94,9 @@ class GemmaTeacherAi implements TeacherAiPort {
     final needVision = request.hasImage;
     await _ensureModel(needVision: needVision);
     if (!_ready || _model == null) {
-      return _fixture(
-        request,
-        _lastInitError ?? 'Gemma no listo',
+      _fail(
+        'Gemma no está listo. Instala el modelo (.litertlm) con push_model.ps1.',
+        cause: _lastInitError,
       );
     }
 
@@ -135,7 +130,7 @@ class GemmaTeacherAi implements TeacherAiPort {
         _ => response.toString(),
       };
       if (text.trim().isEmpty) {
-        return _fixture(request, 'Respuesta vacía de Gemma');
+        _fail('Gemma devolvió una lección vacía. Intenta de nuevo.');
       }
       try {
         final script = _parser.parseLenient(text);
@@ -144,21 +139,24 @@ class GemmaTeacherAi implements TeacherAiPort {
           engine: TeacherEngineKind.gemma,
         );
       } catch (e) {
-        return _fixture(request, 'JSON LessonScript inválido: $e');
+        _fail(
+          'Gemma devolvió una lección inválida. Intenta otra pregunta.',
+          cause: e,
+        );
       }
     } catch (e) {
+      if (e is TeacherAiException) rethrow;
       debugPrint('Khipu: inferencia Gemma falló: $e');
       // OOM u otro fallo → permitir reintento en la próxima pregunta.
-      _ready = false;
-      return _fixture(request, 'Inferencia falló (posible OOM): $e');
+      invalidate();
+      _fail(
+        'Gemma no pudo generar la lección (posible falta de memoria). '
+        'Cierra otras apps e intenta de nuevo.',
+        cause: e,
+      );
     } finally {
       await chat?.close();
     }
-  }
-
-  String _fixtureKey(TeachRequest request) {
-    if (request.question.trim().isNotEmpty) return request.question;
-    return 'problema foto';
   }
 
   Future<void> dispose() async {
