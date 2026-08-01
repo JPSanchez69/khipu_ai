@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
-import 'package:flutter_gemma_mediapipe/flutter_gemma_mediapipe.dart';
+import 'package:flutter_gemma_litertlm/flutter_gemma_litertlm.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/di/navigation_providers.dart';
@@ -11,11 +11,11 @@ import 'features/shell/app_shell.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Registra motor MediaPipe (.task/.bin) para Gemma 3 1B en Android.
+  // LiteRT-LM para gemma-3n-E2B-it-*.litertlm (visión on-device).
   // Sin modelo instalado, GemmaTeacherAi cae a fixtures automáticamente.
   try {
     FlutterGemma.initialize(
-      inferenceEngines: const [MediaPipeEngine()],
+      inferenceEngines: [LiteRtLmEngine()],
     );
   } catch (e) {
     debugPrint('Khipu: FlutterGemma.initialize omitido: $e');

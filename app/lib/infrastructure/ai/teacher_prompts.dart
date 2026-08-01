@@ -10,8 +10,17 @@ Acciones permitidas: writeText, drawShape, drawArrow, highlight, move, erase,
 timeline, conceptNode, wait, speakCue, askSocratic.
 La pizarra es ~360x480. Usa coordenadas claras. Mínimo 5 acciones.
 Incluye speakCue en español sencillo.
+Si hay una imagen, úsala como contexto visual (ejercicio, diagrama o texto);
+explica en la pizarra lo que muestra, sin conversar como chatbot libre.
 ''';
 
-  static String userQuestion(String question) =>
-      'Pregunta del estudiante: $question\nDevuelve solo el JSON LessonScript.';
+  static String userQuestion(String question, {bool hasImage = false}) {
+    final q = question.trim().isEmpty
+        ? '(el estudiante envió una foto sin texto)'
+        : question.trim();
+    final img = hasImage
+        ? '\nHay una foto adjunta: úsala como contexto del problema.'
+        : '';
+    return 'Pregunta del estudiante: $q$img\nDevuelve solo el JSON LessonScript.';
+  }
 }

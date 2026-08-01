@@ -2,10 +2,19 @@
     <!-- STT; INTERNET solo para descarga opcional inicial del modelo Gemma -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <!-- OpenCL opcional para backend GPU LiteRT / MediaPipe -->
+    <uses-native-library android:name="libOpenCL.so" android:required="false"/>
     <application
         android:label="Khipu AI"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:largeHeap="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -43,6 +52,9 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <intent>
+            <action android:name="android.speech.tts.engine.TTS_SERVICE"/>
         </intent>
     </queries>
 </manifest>

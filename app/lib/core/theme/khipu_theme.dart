@@ -12,6 +12,7 @@ class KhipuRadius {
   static const input = 18.0;
   static const card = 14.0;
   static const board = 24.0;
+  static const sm = 8.0;
 }
 
 /// `ThemeData` central de Khipu AI: arma el `ColorScheme` de Flutter a

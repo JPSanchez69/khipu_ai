@@ -6,7 +6,7 @@ import '../domain/ports/voice_ports.dart';
 
 typedef BoardListener = void Function(BoardState state);
 
-/// Reproduce LessonScript sincronizando pizarra + TTS.
+/// Reproduce LessonScript sincronizando pizarra + TTS (con await de voz).
 class LessonPlayer {
   LessonPlayer({
     required this._reducer,
@@ -43,19 +43,18 @@ class LessonPlayer {
           case SpeakCueAction a:
             onStatus?.call(a.text);
             await _tts.speak(a.text);
-            // Approximate lip-sync window for mid devices
-            final wait = (a.text.length * 45).clamp(600, 4500);
-            await Future<void>.delayed(Duration(milliseconds: wait));
           case AskSocraticAction a:
             onStatus?.call(a.prompt);
             await _tts.speak(a.prompt);
-            await Future<void>.delayed(
-              Duration(milliseconds: action.durationMs),
-            );
+            if (!_cancelled && action.durationMs > 0) {
+              await Future<void>.delayed(
+                Duration(milliseconds: action.durationMs.clamp(0, 2500)),
+              );
+            }
           default:
             if (action.durationMs > 0) {
               await Future<void>.delayed(
-                Duration(milliseconds: action.durationMs),
+                Duration(milliseconds: action.durationMs.clamp(0, 3000)),
               );
             }
         }
