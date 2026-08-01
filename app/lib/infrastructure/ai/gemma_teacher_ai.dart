@@ -5,6 +5,7 @@ import '../../domain/lesson_script/lesson_action.dart';
 import '../../domain/lesson_script/lesson_script_parser.dart';
 import '../../domain/lesson_script/lesson_script_quality.dart';
 import '../../domain/ports/teacher_ai_port.dart';
+import 'equation_lesson_builder.dart';
 import 'gemma_model_config.dart';
 import 'teacher_prompts.dart';
 
@@ -81,6 +82,15 @@ class GemmaTeacherAi implements TeacherAiPort {
     throw TeacherAiException(message, cause: cause);
   }
 
+  void _logParseFailure(String attempt, String raw, Object error) {
+    final preview =
+        raw.length > 200 ? '${raw.substring(0, 200)}…' : raw;
+    debugPrint(
+      'Khipu: parsePlayable[$attempt] fail=$error '
+      'len=${raw.length} preview=$preview',
+    );
+  }
+
   /// Parse + calidad jugable (tests / teach).
   LessonScript parsePlayable(String raw) {
     final script = _parser.parseLenient(raw);
@@ -127,7 +137,7 @@ class GemmaTeacherAi implements TeacherAiPort {
           engine: TeacherEngineKind.gemma,
         );
       } catch (firstError) {
-        debugPrint('Khipu: LessonScript inválido, reintento: $firstError');
+        _logParseFailure('1', first, firstError);
         final second = await _generateOnce(chat, TeacherPrompts.retryHint);
         try {
           final script = parsePlayable(second);
@@ -136,8 +146,23 @@ class GemmaTeacherAi implements TeacherAiPort {
             engine: TeacherEngineKind.gemma,
           );
         } catch (e) {
+          _logParseFailure('2', second, e);
+          final guided = EquationLessonBuilder.tryBuild(request.question);
+          if (guided != null) {
+            debugPrint(
+              'Khipu: fallback EquationLessonBuilder '
+              'eq=${EquationLessonBuilder.extractEquation(request.question)}',
+            );
+            return LessonResult(
+              script: guided,
+              engine: TeacherEngineKind.gemma,
+              degradedReason:
+                  'Gemma falló JSON; lección guiada local',
+            );
+          }
           _fail(
-            'Gemma no armó una lección para la pizarra. Intenta otra pregunta.',
+            'Gemma no armó una lección para la pizarra. '
+            'Prueba escribir la ecuación completa (ej. 2x+3=11).',
             cause: e,
           );
         }

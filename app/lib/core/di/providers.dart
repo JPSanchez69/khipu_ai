@@ -178,12 +178,17 @@ class LessonUiNotifier extends Notifier<LessonUiState> {
         );
       }
 
+      final hint = result.degradedReason != null
+          ? 'Gemma 3 1B — ${result.degradedReason}'
+          : 'Gemma 3 1B';
       state = state.copyWith(
         phase: LessonPhase.playing,
         lessonTitle: result.script.title,
         statusMessage: result.script.title,
-        engineHint: 'Gemma 3 1B',
-        clearError: true,
+        engineHint: hint,
+        // Visible pero no bloquea la pizarra (recuperación honestamente degradada).
+        errorMessage: result.degradedReason,
+        clearError: result.degradedReason == null,
       );
       await player.play(
         result.script,
@@ -195,7 +200,9 @@ class LessonUiNotifier extends Notifier<LessonUiState> {
       state = state.copyWith(
         phase: LessonPhase.idle,
         statusMessage: '¿Otra pregunta?',
-        engineHint: 'Gemma 3 1B',
+        engineHint: hint,
+        errorMessage: result.degradedReason,
+        clearError: result.degradedReason == null,
       );
     } on TeacherAiException catch (e) {
       state = state.copyWith(
