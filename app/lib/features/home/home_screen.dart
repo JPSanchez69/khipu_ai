@@ -1,4 +1,3 @@
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -61,29 +60,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  Future<void> _installModelFromFile() async {
-    final result = await FilePicker.pickFiles(
-      type: FileType.any,
-      allowMultiple: false,
-      withData: false,
-    );
-    final path = result?.files.single.path;
-    if (path == null) return;
-    if (!path.toLowerCase().endsWith('.litertlm')) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Elige un archivo .litertlm (gemma-3n-E2B-it-int4)'),
-        ),
-      );
-      return;
-    }
-
+  Future<void> _installModelFromDownloads() async {
     final progress = ref.read(modelInstallProgressProvider.notifier);
     progress.set(0);
     try {
-      await ref.read(gemmaInstallerProvider).installFromFile(
-            path,
+      await ref.read(gemmaInstallerProvider).installFromDownloads(
             onProgress: progress.set,
           );
       ref.invalidate(teacherAiProvider);
@@ -93,11 +74,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         const SnackBar(content: Text('Modelo Gemma E2B instalado')),
       );
     } catch (e) {
-      debugPrint('Khipu: install from file failed: $e');
+      debugPrint('Khipu: install from Downloads failed: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('No se pudo instalar el modelo. Intenta de nuevo.'),
+          content: Text(
+            'No hay .litertlm en Descargas. Copia el modelo y reintenta.',
+          ),
         ),
       );
     } finally {
@@ -124,7 +107,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Descarga falló. Usa archivo local o revisa el token HF.',
+            'Descarga falló. Usa Descargas o revisa el token HF.',
           ),
         ),
       );
@@ -142,12 +125,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: const Icon(Icons.folder_open),
-                title: const Text('Instalar desde archivo .litertlm'),
-                subtitle: const Text('gemma-3n-E2B-it-int4.litertlm en el teléfono'),
+                leading: const Icon(Icons.download_done_outlined),
+                title: const Text('Instalar desde Descargas'),
+                subtitle: const Text('gemma-3n-E2B-it-int4.litertlm'),
                 onTap: () {
                   Navigator.pop(ctx);
-                  _installModelFromFile();
+                  _installModelFromDownloads();
                 },
               ),
               ListTile(
@@ -220,7 +203,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               const SizedBox(height: 4),
               Text(
                 useGemma && !gemmaReady
-                    ? 'Gemma no listo — usa Stub o instala el .litertlm'
+                    ? 'Gemma no listo — instala el .litertlm desde Descargas'
                     : 'Tu profesor en el bolsillo — sin internet',
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: KhipuTheme.leaf,

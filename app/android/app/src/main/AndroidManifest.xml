@@ -8,13 +8,13 @@
         android:maxSdkVersion="32"/>
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
-    <!-- OpenCL opcional para backend GPU LiteRT / MediaPipe -->
-    <uses-native-library android:name="libOpenCL.so" android:required="false"/>
     <application
         android:label="Khipu AI"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:largeHeap="true">
+        <!-- OpenCL opcional para backend GPU LiteRT (debe ir dentro de application) -->
+        <uses-native-library android:name="libOpenCL.so" android:required="false"/>
         <activity
             android:name=".MainActivity"
             android:exported="true"
