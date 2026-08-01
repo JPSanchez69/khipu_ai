@@ -3,8 +3,10 @@ import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:flutter_gemma_mediapipe/flutter_gemma_mediapipe.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/di/navigation_providers.dart';
 import 'core/theme/khipu_theme.dart';
-import 'features/home/home_screen.dart';
+import 'features/landing/landing_screen.dart';
+import 'features/shell/app_shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,16 +24,20 @@ Future<void> main() async {
   runApp(const ProviderScope(child: KhipuApp()));
 }
 
-class KhipuApp extends StatelessWidget {
+class KhipuApp extends ConsumerWidget {
   const KhipuApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final view = ref.watch(appViewProvider);
     return MaterialApp(
       title: 'Khipu AI',
       debugShowCheckedModeBanner: false,
       theme: KhipuTheme.light(),
-      home: const HomeScreen(),
+      home: switch (view) {
+        AppView.landing => const LandingScreen(),
+        AppView.app => const AppShell(),
+      },
     );
   }
 }

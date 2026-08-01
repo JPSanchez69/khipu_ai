@@ -1,0 +1,372 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../core/di/navigation_providers.dart';
+import '../../core/di/providers.dart';
+import '../../core/theme/khipu_colors.dart';
+import '../../core/theme/khipu_text_styles.dart';
+import '../../core/theme/khipu_theme.dart';
+import 'whiteboard/whiteboard_canvas.dart';
+
+/// Tab "Pizarra IA": el tutor. Input de texto + micrófono, la IA piensa
+/// y dibuja pasos en la pizarra. Ver spec de frontend seccion 4.4.
+class PizarraScreen extends ConsumerStatefulWidget {
+  const PizarraScreen({super.key});
+
+  @override
+  ConsumerState<PizarraScreen> createState() => _PizarraScreenState();
+}
+
+class _PizarraScreenState extends ConsumerState<PizarraScreen> {
+  final _controller = TextEditingController();
+  var _listening = false;
+
+  static const _chips = [
+    '¿Cómo resuelvo 2x + 3 = 11?',
+    'Ana tiene 5 manzanas y compra 3 más',
+    '¿Por qué se extinguieron los dinosaurios?',
+  ];
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit([String? text]) async {
+    final q = (text ?? _controller.text).trim();
+    if (q.isEmpty) return;
+    _controller.text = q;
+    await ref.read(lessonUiProvider.notifier).ask(q);
+  }
+
+  Future<void> _listen() async {
+    final stt = ref.read(sttProvider);
+    setState(() => _listening = true);
+    try {
+      final heard = await stt.listenOnce();
+      if (heard != null && heard.isNotEmpty) {
+        _controller.text = heard;
+        await _submit(heard);
+      }
+    } finally {
+      if (mounted) setState(() => _listening = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ui = ref.watch(lessonUiProvider);
+    final board = ref.watch(boardStateProvider);
+    final useGemma = ref.watch(useGemmaProvider);
+    final cursoContexto = ref.watch(pizarraContextProvider);
+    final busy =
+        ui.phase == LessonPhase.thinking || ui.phase == LessonPhase.playing;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= 900;
+        final sidePanel = _SidePanel(
+          busy: busy,
+          chips: _chips,
+          onExample: _submit,
+        );
+
+        final boardColumn = Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 350),
+                child: WhiteboardCanvas(
+                  key: ValueKey(board.actionIndex),
+                  state: board,
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: KhipuColors.surfaceMuted,
+                borderRadius: BorderRadius.circular(KhipuRadius.card),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (board.socraticPrompt != null) ...[
+                    Text(
+                      'Pregunta',
+                      style: KhipuTextStyles.body.copyWith(
+                        color: KhipuColors.primary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      board.socraticPrompt!,
+                      style: KhipuTextStyles.body.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  Text(ui.statusMessage, style: KhipuTextStyles.body),
+                  if (ui.errorMessage != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      ui.errorMessage!,
+                      style: const TextStyle(color: KhipuColors.danger),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    enabled: !busy,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _submit(),
+                    decoration: const InputDecoration(
+                      hintText: 'Escribe tu pregunta…',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filledTonal(
+                  onPressed: busy || _listening ? null : _listen,
+                  icon: Icon(_listening ? Icons.hearing : Icons.mic),
+                  tooltip: 'Hablar',
+                ),
+                const SizedBox(width: 4),
+                if (busy)
+                  IconButton.filled(
+                    onPressed: () => ref.read(lessonUiProvider.notifier).stop(),
+                    icon: const Icon(Icons.stop),
+                  )
+                else
+                  IconButton.filled(
+                    onPressed: () => _submit(),
+                    icon: const Icon(Icons.send_rounded),
+                  ),
+              ],
+            ),
+          ],
+        );
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        cursoContexto == null
+                            ? 'Pizarra IA'
+                            : 'Pizarra IA — $cursoContexto',
+                        style: KhipuTextStyles.heading.copyWith(fontSize: 24),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Pregúntale a tu tutor por voz o texto. Te explica '
+                        'hablando y dibujando.',
+                        style: KhipuTextStyles.body.copyWith(
+                          fontSize: 13.5,
+                          color: KhipuColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                FilterChip(
+                  label: Text(useGemma ? 'Gemma' : 'Stub'),
+                  selected: useGemma,
+                  onSelected: busy
+                      ? null
+                      : (v) => ref.read(useGemmaProvider.notifier).set(v),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: isWide
+                  ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(flex: 5, child: boardColumn),
+                        const SizedBox(width: 22),
+                        SizedBox(width: 300, child: sidePanel),
+                      ],
+                    )
+                  : SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SizedBox(height: 460, child: boardColumn),
+                          const SizedBox(height: 18),
+                          sidePanel,
+                        ],
+                      ),
+                    ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _SidePanel extends StatelessWidget {
+  const _SidePanel({
+    required this.busy,
+    required this.chips,
+    required this.onExample,
+  });
+
+  final bool busy;
+  final List<String> chips;
+  final Future<void> Function(String) onExample;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _PanelCard(
+          title: 'Preguntas de ejemplo',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final c in chips) ...[
+                OutlinedButton(
+                  onPressed: busy ? null : () => onExample(c),
+                  style: OutlinedButton.styleFrom(
+                    alignment: Alignment.centerLeft,
+                    foregroundColor: KhipuColors.textPrimary,
+                    side: const BorderSide(color: KhipuColors.border),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 11,
+                    ),
+                  ),
+                  child: Text(
+                    c,
+                    style: KhipuTextStyles.body.copyWith(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _PanelCard(
+          title: 'Tu racha',
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                '4',
+                style: KhipuTextStyles.heading.copyWith(
+                  fontSize: 32,
+                  color: KhipuColors.accent,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'días seguidos\npracticando',
+                  style: KhipuTextStyles.body.copyWith(
+                    fontSize: 13,
+                    color: KhipuColors.textSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _PanelCard(
+          title: 'Estado del modelo',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ModelStatusLine('📦 Gemma3-1B-IT · int4 (~550MB)'),
+              _ModelStatusLine('⚡ GPU backend (flutter_gemma)'),
+              _ModelStatusLine('📴 Sin conexión requerida'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ModelStatusLine extends StatelessWidget {
+  const _ModelStatusLine(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(
+        text,
+        style: KhipuTextStyles.body.copyWith(
+          fontSize: 13,
+          color: KhipuColors.textSecondary,
+        ),
+      ),
+    );
+  }
+}
+
+class _PanelCard extends StatelessWidget {
+  const _PanelCard({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: KhipuColors.surface,
+        borderRadius: BorderRadius.circular(KhipuRadius.card),
+        border: Border.all(color: KhipuColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title.toUpperCase(),
+            style: KhipuTextStyles.body.copyWith(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.5,
+              color: KhipuColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 14),
+          child,
+        ],
+      ),
+    );
+  }
+}
