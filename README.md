@@ -4,6 +4,7 @@ Profesor inteligente **offline** en Android: Gemma 3n E2B on-device + pizarra pe
 
 ## Docs
 
+- [Cómo correr el proyecto](docs/RUNNING.md)
 - [Blueprint](docs/BLUEPRINT.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Demo script](docs/DEMO.md)
