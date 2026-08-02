@@ -19,7 +19,7 @@ final gemmaInstallerProvider = Provider<GemmaModelInstaller>((ref) {
   return GemmaModelInstaller();
 });
 
-/// Bootstrap: registro del .task + estado del motor MediaPipe.
+/// Bootstrap: registro del .litertlm + estado del motor LiteRT-LM.
 final gemmaBootstrapProvider = FutureProvider<GemmaStatus>((ref) async {
   final installer = ref.watch(gemmaInstallerProvider);
   final progress = ref.read(modelInstallProgressProvider.notifier);
@@ -35,8 +35,10 @@ final gemmaBootstrapProvider = FutureProvider<GemmaStatus>((ref) async {
 });
 
 /// Producto: siempre Gemma. Stub solo en tests vía inyección manual.
+/// No hace watch del bootstrap: evita dispose/recreate del motor al pasar
+/// loading→data (ahorra RAM y cold-start en cada rebuild).
 final teacherAiProvider = Provider<TeacherAiPort>((ref) {
-  ref.watch(gemmaBootstrapProvider);
+  ref.listen(gemmaBootstrapProvider, (_, __) {});
   final gemma = GemmaTeacherAi();
   ref.onDispose(gemma.dispose);
   return gemma;
@@ -179,8 +181,8 @@ class LessonUiNotifier extends Notifier<LessonUiState> {
       }
 
       final hint = result.degradedReason != null
-          ? 'Gemma 3 1B — ${result.degradedReason}'
-          : 'Gemma 3 1B';
+          ? 'Gemma 4 E2B — ${result.degradedReason}'
+          : 'Gemma 4 E2B';
       state = state.copyWith(
         phase: LessonPhase.playing,
         lessonTitle: result.script.title,
@@ -224,7 +226,7 @@ class LessonUiNotifier extends Notifier<LessonUiState> {
 
   String _bootHint(GemmaStatus? status) {
     return switch (status) {
-      GemmaReady() => 'Gemma 3 1B',
+      GemmaReady() => 'Gemma 4 E2B',
       GemmaNotInstalled() => 'Gemma no listo (sin modelo)',
       GemmaFailed(:final reason) => 'Gemma falló: $reason',
       GemmaInstalling(:final progress) => 'Instalando… $progress%',

@@ -9,8 +9,8 @@ import 'equation_lesson_builder.dart';
 import 'gemma_model_config.dart';
 import 'teacher_prompts.dart';
 
-/// Adapter Gemma 3 1B-IT (MediaPipe .task) vía flutter_gemma.
-/// Texto only: sin visión/fotos. Fallos → [TeacherAiException].
+/// Adapter Gemma 4 E2B (LiteRT-LM .litertlm) vía flutter_gemma.
+/// Texto only en MVP: sin visión/fotos. Fallos → [TeacherAiException].
 class GemmaTeacherAi implements TeacherAiPort {
   GemmaTeacherAi({
     this._parser = const LessonScriptParser(),
@@ -31,15 +31,20 @@ class GemmaTeacherAi implements TeacherAiPort {
     return _ready;
   }
 
-  /// Permite reintentar tras instalar el modelo en caliente.
-  void invalidate() {
+  /// Cierra el motor (reinstall / dispose). No usar en errores de JSON.
+  Future<void> invalidate() async {
     _ready = false;
     _lastInitError = null;
+    final m = _model;
     _model = null;
+    try {
+      await m?.close();
+    } catch (_) {}
   }
 
   Future<void> _ensureModel() async {
-    if (_ready) return;
+    // Reutilizar InferenceModel entre preguntas (evita recargar pesos a RAM).
+    if (_ready && _model != null) return;
 
     if (!FlutterGemma.hasActiveModel()) {
       _ready = false;
@@ -52,8 +57,9 @@ class GemmaTeacherAi implements TeacherAiPort {
       await _model?.close();
     } catch (_) {}
     _model = null;
+    _ready = false;
 
-    // CPU primero (estable en A54). GPU como respaldo.
+    // CPU primero (estable en A54). GPU solo si CPU no arranca.
     final backends = [PreferredBackend.cpu, PreferredBackend.gpu];
 
     for (final backend in backends) {
@@ -65,7 +71,10 @@ class GemmaTeacherAi implements TeacherAiPort {
         );
         _ready = true;
         _lastInitError = null;
-        debugPrint('Khipu: Gemma 3 1B listo ($backend)');
+        debugPrint(
+          'Khipu: ${GemmaModelConfig.displayName} listo '
+          '($backend, maxTokens=${GemmaModelConfig.maxTokens})',
+        );
         return;
       } catch (e, st) {
         _lastInitError = '$e';
@@ -75,7 +84,8 @@ class GemmaTeacherAi implements TeacherAiPort {
     }
 
     _ready = false;
-    debugPrint('Khipu: Gemma 3 1B no disponible.');
+    _model = null;
+    debugPrint('Khipu: ${GemmaModelConfig.displayName} no disponible.');
   }
 
   Never _fail(String message, {Object? cause}) {
@@ -107,7 +117,7 @@ class GemmaTeacherAi implements TeacherAiPort {
     await _ensureModel();
     if (!_ready || _model == null) {
       _fail(
-        'Gemma no está listo. Instala gemma3-1b-it-int4.task con push_model.ps1.',
+        'Gemma no está listo. Instala ${GemmaModelConfig.fileName} con push_model.ps1.',
         cause: _lastInitError,
       );
     }
@@ -170,14 +180,23 @@ class GemmaTeacherAi implements TeacherAiPort {
     } catch (e) {
       if (e is TeacherAiException) rethrow;
       debugPrint('Khipu: inferencia Gemma falló: $e');
-      invalidate();
+      // Mantener InferenceModel en RAM; solo el chat se cierra en finally.
+      // invalidate() solo en OOM duro / dispose (recargar pesos es carísimo).
+      final msg = '$e'.toLowerCase();
+      final likelyOom =
+          msg.contains('oom') || msg.contains('memory') || msg.contains('alloc');
+      if (likelyOom) {
+        await invalidate();
+      }
       _fail(
         'Gemma no pudo generar la lección (posible falta de memoria). '
         'Cierra otras apps e intenta de nuevo.',
         cause: e,
       );
     } finally {
-      await chat?.close();
+      try {
+        await chat?.close();
+      } catch (_) {}
     }
   }
 
@@ -195,6 +214,7 @@ class GemmaTeacherAi implements TeacherAiPort {
   }
 
   Future<void> dispose() async {
-    await _model?.close();
+    await invalidate();
   }
 }
+

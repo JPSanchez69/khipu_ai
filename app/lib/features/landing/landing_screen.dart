@@ -92,7 +92,7 @@ class LandingScreen extends ConsumerWidget {
                         foreground: KhipuColors.secondary,
                       ),
                       _LandingTag(
-                        label: '🤖 Gemma 3',
+                        label: 'Gemma 4',
                         background: KhipuColors.accent.withValues(
                           alpha: 0.16,
                         ),

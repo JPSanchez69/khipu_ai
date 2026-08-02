@@ -54,7 +54,7 @@ donde corre `flutter run`).
 
 La app es **Gemma-only** en producto. Sin modelo instalado verás error (no Stub/fixtures).
 
-Modelo: `gemma3-1b-it-int4.task` (~555 MB). Guía: [GEMMA_SETUP.md](GEMMA_SETUP.md).
+Modelo: `gemma-4-E2B-it.litertlm` (~2.58 GB). Guía: [GEMMA_SETUP.md](GEMMA_SETUP.md).
 
 ## 6. Correr los tests
 

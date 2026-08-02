@@ -1,6 +1,6 @@
 # Khipu AI
 
-Profesor inteligente **offline** en Android: Gemma 3 1B-IT on-device + pizarra pedagógica (LessonScript).
+Profesor inteligente **offline** en Android: Gemma 4 E2B on-device + pizarra pedagógica (LessonScript).
 
 ## Docs
 
@@ -23,15 +23,15 @@ flutter run -d chrome          # demo UI sin Android SDK
 flutter run                    # Android (requiere SDK + minSdk 26)
 ```
 
-Por defecto usa **Gemma 3 1B** on-device (texto). Sin modelo instalado la UI muestra error (no Stub). Instala `gemma3-1b-it-int4.task` con `tools/push_model.ps1` (ver [Gemma setup](docs/GEMMA_SETUP.md)).
+Por defecto usa **Gemma 4 E2B** on-device (texto). Sin modelo instalado la UI muestra error (no Stub). Instala `gemma-4-E2B-it.litertlm` con `tools/push_model.ps1` (ver [Gemma setup](docs/GEMMA_SETUP.md)).
 
 ## Qué incluye el MVP
 
 | Prioridad | Entrega |
 |-----------|---------|
-| P0 | Texto → lección + pizarra Canvas + TTS + LessonScript DSL + Gemma 1B |
+| P0 | Texto → lección + pizarra Canvas + TTS + LessonScript DSL + Gemma 4 E2B |
 | P1 | Micrófono STT sincronizado con el flujo de lección |
-| P2 | PDF / multimodal — fuera de alcance con 1B |
+| P2 | PDF / multimodal — visión off en este MVP |
 
 ## Estructura
 

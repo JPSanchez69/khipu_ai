@@ -6,15 +6,15 @@
 
 | Opción | Ventajas | Desventajas | Decisión actual |
 |--------|----------|-------------|-----------------|
-| **Gemma 3 1B-IT int4 MediaPipe `.task`** (`litert-community/Gemma3-1B-IT`) | Cabe en 4–8 GB; ~555 MB disco | Sin visión; JSON LessonScript más frágil | **Elegida** |
-| Gemma 3n E2B int4 LiteRT-LM | Multimodal, mejor calidad | ~3.6 GB; OOM frecuente | Histórico / descartado en MVP actual |
-| llama.cpp / GGUF | Control fino cuantización | FFI más pesado en Flutter | Alternativa si MediaPipe falla |
+| **Gemma 4 E2B LiteRT-LM `.litertlm`** (`litert-community/gemma-4-E2B-it-litert-lm`) | Mejor calidad JSON; ~2.58 GB | Más RAM/latencia que 1B; OOM posible en A54 | **Elegida (GO condicional)** |
+| Gemma 3 1B-IT int4 MediaPipe `.task` | Cabe en 4–8 GB; ~555 MB | Sin visión; JSON más frágil | Histórico / rollback |
+| Gemma 3n E2B int4 LiteRT-LM | Multimodal | ~3.6 GB; OOM frecuente | Histórico |
 | Cloud FastAPI | Fácil | Rompe offline | **Fuera de producto** |
 
-**Kill criteria:** OOM, modelo ausente o JSON inválido → **error visible en UI** (sin fixtures en demo). No empaquetar pesos en el APK.
+**Kill criteria:** OOM, modelo ausente o JSON inválido → **error visible en UI** o lección guiada con `degradedReason`. No empaquetar pesos en el APK.
 
-**Runtime:** `flutter_gemma` + `flutter_gemma_mediapipe` (`MediaPipeEngine`).  
-**Install:** `ModelFileType.task` + `FileSource` desde app-files (`ensureModelInstalled`).  
+**Runtime:** `flutter_gemma` + `flutter_gemma_litertlm` (`LiteRtLmEngine`, `ModelType.gemma4`).  
+**Install:** `ModelFileType.litertlm` + `FileSource` desde app-files (`ensureModelInstalled`).  
 **Backend:** CPU primero, GPU respaldo (A54).
 
 ### App architecture

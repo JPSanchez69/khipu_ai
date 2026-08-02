@@ -120,7 +120,7 @@ class _PizarraScreenState extends ConsumerState<PizarraScreen> {
               ListTile(
                 leading: const Icon(Icons.refresh),
                 title: const Text('Reintentar auto-install'),
-                subtitle: const Text('Busca .task en Documents de la app'),
+                subtitle: const Text('Busca .litertlm en Documents de la app'),
                 onTap: () {
                   Navigator.pop(ctx);
                   _retryBootstrap();
@@ -457,8 +457,8 @@ class _SidePanel extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const _ModelStatusLine('Gemma 3 1B-IT · int4 (.task)'),
-              const _ModelStatusLine('Motor MediaPipe (flutter_gemma)'),
+              const _ModelStatusLine('Gemma 4 E2B · (.litertlm)'),
+              const _ModelStatusLine('Motor LiteRT-LM (flutter_gemma)'),
               const _ModelStatusLine('Texto only — sin fotos'),
               _ModelStatusLine(
                 gemmaReady ? 'Modelo activo' : 'Falta instalar el modelo',

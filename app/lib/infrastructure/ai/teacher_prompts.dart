@@ -1,4 +1,4 @@
-/// System prompt compacto para Gemma 3 1B-IT → LessonScript JSON v0.1.
+/// System prompt compacto para Gemma 4 E2B → LessonScript JSON v0.1.
 class TeacherPrompts {
   TeacherPrompts._();
 

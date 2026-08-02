@@ -4,7 +4,7 @@ param(
   [Parameter(Mandatory = $true)]
   [string]$ModelPath,
   [string]$PackageId = "pe.khipu.khipu_ai",
-  [string]$FileName = "gemma3-1b-it-int4.task"
+  [string]$FileName = "gemma-4-E2B-it.litertlm"
 )
 
 $ErrorActionPreference = "Stop"
@@ -20,7 +20,7 @@ if ($DeviceId) {
   $adbArgs = @()
 }
 
-$tmpRemote = "/data/local/tmp/khipu_gemma.task"
+$tmpRemote = "/data/local/tmp/khipu_gemma.litertlm"
 $appRelative = "app_flutter/$FileName"
 
 Write-Host "1) Push a /data/local/tmp (puede tardar)..."
@@ -43,5 +43,5 @@ if ($remoteSize -ne $localSize) {
 }
 
 Write-Host "OK: modelo en app_flutter ($remoteSize bytes), propiedad de la app."
-Write-Host "Abre Khipu: debe activar Gemma 3 1B sin 'Permission denied'."
+Write-Host "Abre Khipu: debe activar Gemma 4 E2B sin 'Permission denied'."
 Write-Host "NOTA: usa 'adb install -r' (no 'flutter install')."

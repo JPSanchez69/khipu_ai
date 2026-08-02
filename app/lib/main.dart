@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
-import 'package:flutter_gemma_mediapipe/flutter_gemma_mediapipe.dart';
+import 'package:flutter_gemma_litertlm/flutter_gemma_litertlm.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/di/navigation_providers.dart';
@@ -15,9 +15,9 @@ Future<void> main() async {
   if (kDebugMode) {
     FlutterGemma.logLevel = GemmaLogLevel.verbose;
   }
-  // Init plugin; el registro del .task lo hace gemmaBootstrapProvider.
+  // Gemma 4 E2B usa LiteRT-LM (.litertlm). El registro lo hace gemmaBootstrapProvider.
   await FlutterGemma.initialize(
-    inferenceEngines: [MediaPipeEngine()],
+    inferenceEngines: [LiteRtLmEngine()],
   );
 
   runApp(const ProviderScope(child: KhipuApp()));

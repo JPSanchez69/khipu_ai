@@ -12,7 +12,7 @@ class GemmaBootstrapCache {
   static GemmaStatus? last;
 }
 
-/// Registra el .task desde Documents (app_flutter) para flutter_gemma / MediaPipe.
+/// Registra el .litertlm desde Documents (app_flutter) para flutter_gemma / LiteRT-LM.
 ///
 /// El archivo debe estar en Documents de la app (propiedad de la app).
 /// Usar: `.\tools\push_model.ps1` (run-as → app_flutter).
@@ -56,7 +56,7 @@ class GemmaModelInstaller {
     return null;
   }
 
-  /// Registra el modelo en flutter_gemma (FileSource, fileType task).
+  /// Registra el modelo en flutter_gemma (FileSource, fileType litertlm).
   Future<GemmaStatus> ensureModelInstalled({
     void Function(int progress)? onProgress,
   }) async {
@@ -83,7 +83,10 @@ class GemmaModelInstaller {
         return const GemmaFailed('Registro falló (hasActiveModel=false)');
       }
       // ignore: avoid_print
-      print('Khipu: flutter_gemma listo (fileType=task / MediaPipe)');
+      print(
+        'Khipu: flutter_gemma listo '
+        '(${GemmaModelConfig.fileType.name} / LiteRT-LM / ${GemmaModelConfig.displayName})',
+      );
       return const GemmaReady();
     } catch (e) {
       // ignore: avoid_print
@@ -103,7 +106,7 @@ class GemmaModelInstaller {
     }
 
     await FlutterGemma.installModel(
-      modelType: ModelType.gemmaIt,
+      modelType: GemmaModelConfig.modelType,
       fileType: GemmaModelConfig.fileType,
     ).fromFile(absolutePath).install();
     onProgress?.call(100);
@@ -119,7 +122,7 @@ class GemmaModelInstaller {
     final token = hfToken ??
         const String.fromEnvironment('HUGGINGFACE_TOKEN', defaultValue: '');
     final builder = FlutterGemma.installModel(
-      modelType: ModelType.gemmaIt,
+      modelType: GemmaModelConfig.modelType,
       fileType: GemmaModelConfig.fileType,
     ).fromNetwork(
       GemmaModelConfig.networkUrl,
